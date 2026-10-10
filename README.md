@@ -7,6 +7,36 @@ Der vollständige Editor bietet zusätzlich Makros und einen 30-Sekunden-Test.
 
 ## Auf einem zweiten Omarchy-Gerät installieren
 
+### Einfache Installation (empfohlen)
+
+Voraussetzungen: Linux x86_64, glibc 2.44+, Python 3.12+ und GitHub CLI (`gh`).
+Auf Omarchy lässt sich GitHub CLI mit `omarchy pkg add github-cli` installieren.
+Einmalig auf dem zweiten Gerät mit einem Konto anmelden, das Zugriff auf das
+private Repository hat:
+
+```sh
+gh auth login --web --git-protocol https
+```
+
+Danach reichen im gewünschten Download-Verzeichnis zwei Befehle:
+
+```sh
+gh release download v0.2.0 --repo KalEl117/kanata-studio-rust --pattern install.py --clobber
+python3 install.py
+```
+
+Der Installer lädt die App und auf Omarchy auch das Plugin, prüft beide
+Archive vor der Installation, entpackt sie automatisch, installiert für den
+aktuellen Benutzer, aktiviert das Bar-Widget und startet die Omarchy-Shell neu.
+Danach steht **Kanata Studio Rust** im App-Launcher bereit. Temporäre
+Download-Dateien werden automatisch entfernt. Derselbe Ablauf aktualisiert
+eine vorhandene Installation.
+
+Optional: `python3 install.py --app-only` installiert nur die App;
+`--no-restart` verschiebt den Shell-Neustart; `--check-only` prüft die Downloads
+ohne Installation. Kanata und `kanata.service` müssen bereits eingerichtet sein,
+um Belegungen zu prüfen, zu speichern und live zu testen.
+
 ### Fertige Pakete aus GitHub Releases
 
 Das private Repository erfordert eine GitHub-Anmeldung mit Zugriffsrecht.
