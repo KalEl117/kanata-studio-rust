@@ -1,0 +1,15 @@
+;; Stable fixture for editing a wrapped tap-hold configuration.
+(defcfg process-unmapped-keys yes)
+(defvirtualkeys relkana (release-key kana))
+(defsrc caps a s d f j k l Semicolon)
+(deflayer base
+  (multi kana (tap-hold 180 200 esc (multi rctrl rshift ralt rmeta)) (macro 5 (on-press tap-vkey relkana)))
+  (multi kana (tap-hold 150 200 a lmeta) (macro 5 (on-press tap-vkey relkana)))
+  (multi kana (tap-hold 150 200 s lalt) (macro 5 (on-press tap-vkey relkana)))
+  (multi kana (tap-hold 150 200 d lctl) (macro 5 (on-press tap-vkey relkana)))
+  (multi kana (tap-hold 150 200 f lshft) (macro 5 (on-press tap-vkey relkana)))
+  (multi kana (tap-hold 150 200 j rshift) (macro 5 (on-press tap-vkey relkana)))
+  (multi kana (tap-hold 150 200 k rctl) (macro 5 (on-press tap-vkey relkana)))
+  (multi kana (tap-hold 150 200 l lalt) (macro 5 (on-press tap-vkey relkana)))
+  (multi kana (tap-hold 150 200 Semicolon rmeta) (macro 5 (on-press tap-vkey relkana)))
+)

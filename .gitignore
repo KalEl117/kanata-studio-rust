@@ -1,0 +1,10 @@
+/target/
+/dist/
+**/__pycache__/
+/qt/Makefile
+/qt/.qmake.stash
+/qt/*.o
+/qt/moc_*
+/qt/qrc_*
+/qt/kanata-studio-rust
+/reports/

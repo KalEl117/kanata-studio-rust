@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "zoltan.kanata-studio",
+  "name": "Kanata Studio",
+  "version": "0.1.0",
+  "author": "Zoltan",
+  "description": "Kanata-Status und Zugang zu Kanata Studio Rust; Grundlage für den integrierten Editor.",
+  "kinds": ["bar-widget"],
+  "entryPoints": {"barWidget": "BarWidget.qml"},
+  "barWidget": {
+    "displayName": "Kanata Studio",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

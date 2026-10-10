@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="/">
+    <file alias="main.qml">../target/ui/main.qml</file>
+    <file alias="ActionPanel.qml">../target/ui/ActionPanel.qml</file>
+  </qresource>
+</RCC>
