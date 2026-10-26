@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Build the plugin archive and its download checksum."""
+import argparse
 import hashlib
 from pathlib import Path
 import platform
@@ -9,7 +10,13 @@ import tarfile
 import tomllib
 
 root = Path(__file__).resolve().parents[1]
-subprocess.run([sys.executable, str(root / "tools/prepare-omarchy-plugin.py")], check=True)
+parser = argparse.ArgumentParser()
+parser.add_argument("--skip-validation", action="store_true", help="Nur für Paket-Builds ohne Omarchy")
+args = parser.parse_args()
+command = [sys.executable, str(root / "tools/prepare-omarchy-plugin.py")]
+if args.skip_validation:
+    command.append("--skip-validation")
+subprocess.run(command, check=True)
 version = tomllib.loads((root / "Cargo.toml").read_text())["package"]["version"]
 plugin = root / "dist/omarchy-plugin/zoltan.kanata-studio"
 archive = root / "dist" / f"kanata-studio-plugin-{version}-linux-{platform.machine()}.tar.gz"

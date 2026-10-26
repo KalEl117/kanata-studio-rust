@@ -1,0 +1,123 @@
+name: Portable Linux bundle
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    # Build against an older glibc instead of the developer's rolling distro.
+    container: debian:12
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QT_QPA_PLATFORMTHEME: ''
+      QT_QUICK_BACKEND: software
+    steps:
+      - name: Install build tools and Qt runtime modules
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl git build-essential binutils python3 \
+            qt6-base-dev qt6-declarative-dev qt6-wayland \
+            qml6-module-qtquick qml6-module-qtquick-controls \
+            qml6-module-qtquick-templates qml6-module-qtquick-window \
+            qml6-module-qtquick-layouts qml6-module-qtquick-dialogs \
+            qml6-module-qtquick-shapes qml6-module-qtqml \
+            qml6-module-qtqml-models qml6-module-qtqml-workerscript \
+            qml6-module-qt-labs-settings qml6-module-qt-labs-platform \
+            libgl1-mesa-dri fonts-dejavu-core
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.88.0
+      - name: Test installer and Rust core
+        run: |
+          python3 -m unittest discover -s tests -p 'test_*.py'
+          cargo fetch --locked
+          cargo test --locked --offline
+      - name: Cache pinned upstream test validator
+        id: validator-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/kanata-validator
+          key: kanata-v1.12.0-debian12-x86_64-v1
+      - name: Build pinned upstream Kanata validator for package tests
+        if: steps.validator-cache.outputs.cache-hit != 'true'
+        run: |
+          rustup toolchain install stable --profile minimal
+          cargo +stable install --git https://github.com/jtroo/kanata --tag v1.12.0 --locked --root /tmp/kanata-validator --bin kanata kanata
+      - name: Add test validator to PATH
+        run: |
+          echo /tmp/kanata-validator/bin >> "$GITHUB_PATH"
+      - name: Build and verify relocatable package
+        run: |
+          ./package.sh
+          python3 tools/check-package.py
+          python3 tools/package-plugin.py --skip-validation
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import tarfile
+          path = next(pathlib.Path('dist').glob('kanata-studio-rust-*-linux-x86_64.tar.gz'))
+          with tarfile.open(path) as archive:
+              manifest = json.load(archive.extractfile(path.name.removesuffix('.tar.gz') + '/manifest.json'))
+          assert tuple(map(int, manifest['minimumGlibc'].split('.'))) <= (2, 36), manifest
+          PY
+          mkdir -p dist/ci
+          cp install.py dist/
+          cp /tmp/kanata-validator/bin/kanata dist/ci/
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: linux-x86_64-glibc-2.36
+          path: |
+            dist/kanata-studio-rust-*-linux-x86_64.tar.gz
+            dist/kanata-studio-rust-*-linux-x86_64.tar.gz.sha256
+            dist/kanata-studio-plugin-*-linux-x86_64.tar.gz
+            dist/kanata-studio-plugin-*-linux-x86_64.tar.gz.sha256
+            dist/install.py
+            dist/ci/kanata
+          if-no-files-found: warn
+
+  smoke-test:
+    needs: build
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['debian:12', 'ubuntu:24.04', 'fedora:44']
+    container: ${{ matrix.image }}
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QT_QPA_PLATFORMTHEME: ''
+      QT_QUICK_BACKEND: software
+    steps:
+      - name: Install host runtime only
+        run: |
+          if command -v apt-get >/dev/null 2>&1; then
+            apt-get update
+            apt-get install -y --no-install-recommends python3 ca-certificates libgl1 libegl1 fonts-dejavu-core
+          else
+            dnf install -y python3 ca-certificates libglvnd-glx libglvnd-egl dejavu-sans-fonts
+          fi
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-x86_64-glibc-2.36
+          path: bundle
+      - name: Verify checksum, install and launch without system Qt
+        run: |
+          cd bundle
+          chmod +x ci/kanata
+          export PATH="$PWD/ci:$PATH"
+          sha256sum -c *.sha256
+          tar -xzf kanata-studio-rust-*-linux-x86_64.tar.gz
+          python3 kanata-studio-rust-*-linux-x86_64/install.py --prefix /tmp/studio-install
+          /tmp/studio-install/bin/kanata-studio-rust --self-test
+          /tmp/studio-install/bin/kanata-studio-rust --screenshot /tmp/studio.png /tmp/studio-install/share/kanata-studio-rust/share/test.kbd
+          test -s /tmp/studio.png

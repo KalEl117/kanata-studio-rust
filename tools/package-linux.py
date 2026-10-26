@@ -67,6 +67,17 @@ def build_bundle(bundle):
         licenses = Path("/usr/share/licenses") / package
         if licenses.is_dir() and not (bundle / "licenses" / package).exists():
             shutil.copytree(licenses, bundle / "licenses" / package)
+    # Debian keeps redistribution notices in /usr/share/doc, not /usr/share/licenses.
+    if shutil.which("dpkg-query"):
+        for path in (bundle / "lib").iterdir():
+            found = subprocess.run(["dpkg-query", "-S", f"*/{path.name}"], text=True, capture_output=True)
+            for line in found.stdout.splitlines():
+                package = line.split(": ", 1)[0].split(":", 1)[0]
+                notice = Path("/usr/share/doc") / package / "copyright"
+                if notice.is_file():
+                    target = bundle / "licenses" / package
+                    target.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(notice, target / "copyright")
     (bundle / "bin/qt.conf").write_text("[Paths]\nPrefix=..\nPlugins=plugins\nQmlImports=qml\nLibraries=lib\n")
     (bundle / "launch.sh").write_text('''#!/bin/sh
 set -eu
