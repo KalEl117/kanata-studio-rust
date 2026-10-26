@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Validate a relocated archive and an installed copy without changing user config."""
 import hashlib
+import importlib.util
 import json
 import os
 import platform
 from pathlib import Path
 import subprocess
 import sys
-import tarfile
 import tempfile
 import tomllib
 
@@ -17,10 +17,12 @@ archive = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else root / f"dist/ka
 checksum = Path(str(archive)+".sha256").read_text().split()[0]
 assert hashlib.sha256(archive.read_bytes()).hexdigest() == checksum
 env = dict(os.environ, QT_QPA_PLATFORM="offscreen", QT_QPA_PLATFORMTHEME="")
+spec = importlib.util.spec_from_file_location("release_installer", root / "install.py")
+installer = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(installer)
 with tempfile.TemporaryDirectory(prefix="kanata-rust-package-check-") as folder:
     relocated = Path(folder)
-    with tarfile.open(archive) as tar:
-        tar.extractall(relocated, filter="data")
+    installer.extract_bundle(archive, relocated, archive.name.removesuffix(".tar.gz"))
     bundle = next(relocated.iterdir())
     assert (bundle / "plugins/wayland-shell-integration/libxdg-shell.so").is_file(), "Wayland xdg-shell plugin missing"
     metadata = json.loads((bundle / "manifest.json").read_text())
