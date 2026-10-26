@@ -5,47 +5,74 @@ Qt-Quick-App und einem Omarchy-Plugin. Die Mini-Tastatur im Bar-Popup unterstüt
 Tastenbearbeitung, Tippen/Halten, Kanata-Code, Rückgängig und Speichern.
 Der vollständige Editor bietet zusätzlich Makros und einen 30-Sekunden-Test.
 
-## Auf einem zweiten Omarchy-Gerät installieren
+## Unter Linux installieren
 
-### Einfache Installation (empfohlen)
+Die eigenständige App benötigt weder Omarchy noch Hyprland. Sie kann unter
+Wayland oder X11 laufen; Qt und QML werden im Download-Paket mitgeliefert.
+Installiert wird für den aktuellen Benutzer ohne `sudo`.
 
-Voraussetzungen: Linux x86_64, glibc 2.44+, Python 3.12+ und GitHub CLI (`gh`).
-Auf Omarchy lässt sich GitHub CLI mit `omarchy pkg add github-cli` installieren.
-Einmalig auf dem zweiten Gerät mit einem Konto anmelden, das Zugriff auf das
-private Repository hat:
+### Einfacher Download-Installer
 
-```sh
-gh auth login --web --git-protocol https
-```
-
-Danach reichen im gewünschten Download-Verzeichnis zwei Befehle:
+Voraussetzungen: Linux mit glibc, Python 3.10+ und ein veröffentlichtes Paket
+für die eigene Architektur. GitHub-Konto, GitHub CLI, Rust und Compiler sind
+für die Installation nicht erforderlich.
 
 ```sh
-gh release download v0.2.0 --repo KalEl117/kanata-studio-rust --pattern install.py --clobber
+curl -fL https://raw.githubusercontent.com/KalEl117/kanata-studio-rust/main/install.py -o install.py
 python3 install.py
 ```
 
-Der Installer lädt die App und auf Omarchy auch das Plugin, prüft beide
-Archive vor der Installation, entpackt sie automatisch, installiert für den
-aktuellen Benutzer, aktiviert das Bar-Widget und startet die Omarchy-Shell neu.
-Danach steht **Kanata Studio Rust** im App-Launcher bereit. Temporäre
-Download-Dateien werden automatisch entfernt. Derselbe Ablauf aktualisiert
-eine vorhandene Installation.
+Alternativ `install.py` im Browser aus diesem Repository herunterladen und mit
+Python starten. Das Skript lädt das neueste stabile GitHub-Release, prüft alle
+SHA-256-Prüfsummen, entpackt die Pakete und legt einen App-Launcher an.
+Erneutes Ausführen aktualisiert die Installation. Ohne Omarchy wird nur die
+App installiert; auf Omarchy zusätzlich das passende Plugin mit Aktivierung
+und Shell-Neustart.
 
-Optional: `python3 install.py --app-only` installiert nur die App;
-`--no-restart` verschiebt den Shell-Neustart; `--check-only` prüft die Downloads
-ohne Installation. Kanata und `kanata.service` müssen bereits eingerichtet sein,
-um Belegungen zu prüfen, zu speichern und live zu testen.
+**Aktueller Release-Stand:** Das bestehende Release **v0.2.0** enthält weiterhin
+nur x86_64-Pakete mit **glibc 2.44+**. Der neue Installer kann diese Grenze
+nicht aufheben. Erst ein erfolgreich mit dem unten beschriebenen Workflow
+gebautes und veröffentlichtes Release liefert das breiter kompatible Paket.
+Für aarch64 kann der Installer passende Assets auswählen, sobald sie
+veröffentlicht sind; der Build-Workflow baut zunächst nur x86_64.
 
-### Fertige Pakete aus GitHub Releases
+Optionen:
 
-Das private Repository erfordert eine GitHub-Anmeldung mit Zugriffsrecht.
-Lade unter **Releases** das App-Archiv und bei Bedarf das Plugin-Archiv für
-Linux x86_64 herunter. Beide Archive haben eine separate `.sha256`-Datei.
-Die hier erzeugten Pakete benötigen **glibc 2.44 oder neuer**; bei älteren
-Systemen oder anderer Architektur bitte direkt auf dem Zielgerät bauen.
+```sh
+python3 install.py --check-only          # nur herunterladen und prüfen
+python3 install.py --app-only            # auch auf Omarchy nur die App
+python3 install.py --release v0.2.0       # bestimmtes Release auswählen
+python3 install.py --prefix ~/.local     # anderes App-Installationspräfix
+python3 install.py --no-restart          # Omarchy-Shell später neu starten
+```
 
-Im Download-Verzeichnis:
+Das Paket bestimmt seine Mindest-glibc-Version in `manifest.json`. Ein
+unpassendes Paket wird vor der Installation mit Angabe der benötigten und
+vorhandenen Version abgelehnt. Alpine/musl benötigt einen eigenen Build.
+
+Standardpfade sind `~/.local/share/kanata-studio-rust`,
+`~/.local/share/applications/kanata-studio-rust.desktop` und
+`~/.local/bin/kanata-studio-rust`. Falls `~/.local/bin` nicht im `PATH` steht,
+kann die App über den App-Launcher oder den vollständigen Pfad starten.
+
+### Was zusätzlich für Kanata nötig ist
+
+Die App und das Plugin installieren weder Kanata noch einen Tastaturdienst
+und übertragen keine persönliche Tastaturbelegung. Zum Prüfen, Speichern und
+Live-Testen benötigt die App Kanata sowie einen eingerichteten
+**systemd-Benutzerdienst `kanata.service`**, der die geöffnete Konfiguration
+verwendet. Ein ausschließlich systemweiter Kanata-Dienst genügt dem aktuellen
+Dienstmodell nicht. Ein automatischer Kanata-/Berechtigungsassistent ist noch
+nicht enthalten.
+
+Das Omarchy-Plugin öffnet standardmäßig `~/.config/kanata/kanata.kbd`, ersatzweise
+`~/.config/kanata/config.kbd`. Details: [Plugin-Anleitung](omarchy-plugin/README.md).
+
+### Archiv ohne Download-Installer verwenden
+
+App-Archiv und zugehörige `.sha256`-Datei unter
+[Releases](https://github.com/KalEl117/kanata-studio-rust/releases) herunterladen.
+Im Download-Verzeichnis, hier am Beispiel von v0.2.0:
 
 ```sh
 sha256sum -c kanata-studio-rust-0.2.0-linux-x86_64.tar.gz.sha256
@@ -54,33 +81,71 @@ python3 kanata-studio-rust-0.2.0-linux-x86_64/install.py
 ~/.local/bin/kanata-studio-rust
 ```
 
-Optional das Omarchy-Plugin installieren:
+Alternativ lässt sich `launch.sh` direkt aus dem entpackten Ordner starten.
+Python wird nur für die Installation benötigt. Das Paket enthält Qt,
+QML-Module, Plattform-Plugins und die benötigten Laufzeitbibliotheken.
+Grafiktreiber und eine Wayland- oder X11-Sitzung stellt das Zielsystem bereit.
 
-```sh
-sha256sum -c kanata-studio-plugin-0.2.0-linux-x86_64.tar.gz.sha256
-tar -xzf kanata-studio-plugin-0.2.0-linux-x86_64.tar.gz
-python3 zoltan.kanata-studio/install.py --enable
-omarchy restart shell
-```
+## Pakete für andere Distributionen bauen
 
-Die App und das Plugin installieren weder Kanata noch einen Tastaturdienst und
-übertragen keine persönliche Tastaturbelegung. Für Prüfen, Speichern und Testen
-muss Kanata vorhanden sein. `kanata.service` muss als systemd-Benutzerdienst
-bereits eingerichtet sein und die geöffnete Konfiguration verwenden.
-Das Plugin öffnet standardmäßig `~/.config/kanata/kanata.kbd`, ersatzweise
-`~/.config/kanata/config.kbd`. Details: [Plugin-Anleitung](omarchy-plugin/README.md).
+[Portable Linux bundle](.github/workflows/linux-bundle.yml) baut die App
+auf Debian 12 mit Qt 6.4 und prüft, dass die gemessene Mindestversion von glibc
+höchstens 2.36 beträgt. Diese Basis soll unter anderem Debian 12+, Ubuntu
+24.04+/entsprechende Mint-Versionen, Fedora und Arch erreichen. Ubuntu 22.04
+mit glibc 2.35 liegt außerhalb dieser Build-Basis.
+
+Der Workflow läuft für Pull Requests, `main`, Versionstags und manuell. Er
+prüft das entpackte Paket, eine Installation in einem temporären Verzeichnis
+und die Wiederherstellung. Zusätzliche Container-Starttests unter Debian 12,
+Ubuntu 24.04 und Fedora verwenden das fertige Paket ohne systemweit
+installiertes Qt. Das prüft keinen echten Wayland-/X11-Desktop und ersetzt
+keinen Grafiktreibertest auf den Zielsystemen.
+
+Nach einem erfolgreichen Lauf liegen Archiv, Prüfsumme und Download-Installer
+im Actions-Artefakt `linux-x86_64-glibc-2.36`. Der Workflow veröffentlicht kein
+Release automatisch. Für ein Release müssen diese Dateien mit der passenden
+Version aus `Cargo.toml` als Release-Assets hochgeladen werden. Auf Omarchy
+benötigt der automatische Installer außerdem das Plugin-Archiv derselben
+Version samt Prüfsumme; andernfalls `--app-only` verwenden. Die bisherigen
+lokalen Omarchy-Builds sind weiterhin möglich, behalten aber die glibc-Grenze
+des Build-Rechners.
+
+Qt sucht Module und Plugins über `qt.conf`; siehe
+[Qt-Dokumentation](https://doc.qt.io/qt-6/qt-conf.html). Die Bibliotheken werden
+dynamisch geladen; verfügbare Distributions-Lizenztexte werden unter
+`licenses/` mitgeliefert. Native Hilfsprogramme wie Kanata und systemctl
+verwenden weiterhin ihre ursprüngliche Bibliotheksumgebung.
+
+`~/.local/bin/kanata-studio-rust --display-check` zeigt Fensterprotokoll und
+Bildschirmskalierung. Qt 6 übernimmt die Skalierung automatisch; ein zusätzliches
+`QT_SCALE_FACTOR` multipliziert sie nochmals ([Qt High DPI](https://doc.qt.io/qt-6/highdpi.html)).
 
 ### Aus dem Quellcode bauen
 
-Das Repository ist eigenständig; die frühere Electron- oder Qt-Projektkopie
-wird nicht benötigt. Benötigt werden Git, Python 3.11+, Rust 1.88+, Cargo,
-ein C++-Compiler, make, qmake6 und Qt 6 Quick/Quick Controls 2/Concurrent.
-Auf Arch/Omarchy heißen die Qt-Pakete `qt6-base`, `qt6-declarative` und
-`qt6-wayland`; die Compiler-Werkzeuge gehören zu `base-devel`.
+Benötigt werden Git, Python 3.11+, Rust 1.88+, Cargo, ein C++-Compiler,
+make, qmake6 und Qt 6.4+ mit Quick/Quick Controls 2/Concurrent.
 
-Nach dem Klonen des privaten Repositorys:
+Auf Debian 12 / Ubuntu 24.04:
 
 ```sh
+sudo apt install git python3 build-essential qt6-base-dev qt6-declarative-dev qt6-wayland \
+  qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-templates \
+  qml6-module-qtquick-window qml6-module-qtquick-layouts qml6-module-qtquick-dialogs \
+  qml6-module-qtquick-shapes qml6-module-qtqml qml6-module-qtqml-models \
+  qml6-module-qtqml-workerscript qml6-module-qt-labs-settings qml6-module-qt-labs-platform
+```
+
+Auf Arch/Omarchy:
+
+```sh
+sudo pacman -S --needed git python base-devel rust qt6-base qt6-declarative qt6-wayland
+```
+
+Rust 1.88+ muss zusätzlich vorhanden sein, etwa über eine vorhandene rustup-
+Installation. Nach dem Klonen:
+
+```sh
+git clone https://github.com/KalEl117/kanata-studio-rust.git
 cd kanata-studio-rust
 cargo fetch --locked
 ./build.sh
@@ -88,27 +153,13 @@ cargo fetch --locked
 ./package.sh --install
 ```
 
-Für das Plugin zusätzlich:
+Für das Omarchy-Plugin zusätzlich:
 
 ```sh
 python3 tools/prepare-omarchy-plugin.py
 python3 tools/install-plugin.py --source dist/omarchy-plugin/zoltan.kanata-studio --enable
 omarchy restart shell
 ```
-
-## Installierte App und Paket
-
-Auf diesem Rechner ist **Kanata Studio Rust** als eigener Launcher installiert. Der Terminal-Aufruf lautet `~/.local/bin/kanata-studio-rust`. Der Launcher startet die installierte ausführbare Datei direkt und baut nichts.
-
-Das übertragbare Paket liegt unter `dist/kanata-studio-rust-0.2.0-linux-x86_64.tar.gz`, mit einer SHA-256-Prüfsumme daneben. Es enthält Qt 6.11.2, QML-Module, Plattform-Plugins und die benötigten Bibliotheken. Auf einem kompatiblen Zielgerät sind Rust, Cargo, Node und ein Compiler zum Starten nicht erforderlich.
-
-Zielsystem: Linux x86_64 mit **glibc 2.44 oder neuer**, passenden Grafiktreibern und Wayland oder X11. Eine ältere Linux-Distribution benötigt einen Build auf einer älteren Basis. Ein zweiter Laptop wurde nicht geprüft; Paket und installierte Kopie wurden hier nach dem Entpacken in einem anderen Verzeichnis getestet. Kanata und `kanata.service` werden nicht mitinstalliert; sie sind für Prüfen, Speichern und den Testmodus erforderlich.
-
-Zum Übertragen das Archiv entpacken und im entpackten Ordner `./install.py` ausführen. Python 3 wird nur für den Installer benötigt. Alternativ `./launch.sh` direkt starten. Die Installation verwendet `~/.local/share/kanata-studio-rust`, `~/.local/share/applications/kanata-studio-rust.desktop` und `~/.local/bin/kanata-studio-rust`. Ein anderer Installationspfad ist mit `./install.py --prefix /gewünschter/pfad` möglich.
-
-Qt sucht seine Module und Plugins im Paket über `qt.conf`; das Verfahren beschreibt die [Qt-Dokumentation](https://doc.qt.io/qt-6/qt-conf.html). Die Bibliotheken werden dynamisch geladen, Lizenztexte liegen im Paket unter `licenses/`. Native Hilfsprogramme wie Kanata, Hyprland und systemctl verwenden weiterhin ihre ursprüngliche Bibliotheksumgebung. Die Wiederherstellung startet den Paket-Launcher, damit sie auch nach einem Neustart die mitgelieferte Qt-Laufzeit findet.
-
-Das Paket enthält auch das Wayland-Plugin `xdg-shell`, damit die App unter Hyprland nativ startet und die Bildschirmskalierung übernimmt. `~/.local/bin/kanata-studio-rust --display-check` zeigt das verwendete Fensterprotokoll und die Skalierung je Bildschirm, ohne eine Konfiguration zu öffnen oder einen Dienst einzurichten. Qt 6 übernimmt die Skalierung automatisch; ein zusätzliches `QT_SCALE_FACTOR` multipliziert diese nochmals ([Qt High DPI](https://doc.qt.io/qt-6/highdpi.html)).
 
 ## Entwicklung starten und bauen
 
