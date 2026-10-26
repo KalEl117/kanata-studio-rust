@@ -41,10 +41,11 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_*.py'
           cargo fetch --locked
           cargo test --locked --offline
-      - name: Fetch verified Kanata validator for package tests
+      - name: Build pinned upstream Kanata validator for package tests
         run: |
-          python3 tools/fetch-test-kanata.py /tmp/kanata-validator
-          echo /tmp/kanata-validator >> "$GITHUB_PATH"
+          rustup toolchain install stable --profile minimal
+          cargo +stable install --git https://github.com/jtroo/kanata --tag v1.12.0 --locked --root /tmp/kanata-validator --bin kanata
+          echo /tmp/kanata-validator/bin >> "$GITHUB_PATH"
       - name: Build and verify relocatable package
         run: |
           ./package.sh
@@ -60,7 +61,7 @@ jobs:
           PY
           mkdir -p dist/ci
           cp install.py dist/
-          cp tools/fetch-test-kanata.py dist/ci/
+          cp /tmp/kanata-validator/bin/kanata dist/ci/
       - uses: actions/upload-artifact@v4
         with:
           name: linux-x86_64-glibc-2.36
@@ -68,7 +69,7 @@ jobs:
             dist/kanata-studio-rust-*-linux-x86_64.tar.gz
             dist/kanata-studio-rust-*-linux-x86_64.tar.gz.sha256
             dist/install.py
-            dist/ci/fetch-test-kanata.py
+            dist/ci/kanata
           if-no-files-found: error
 
   smoke-test:
@@ -99,8 +100,8 @@ jobs:
       - name: Verify checksum, install and launch without system Qt
         run: |
           cd bundle
-          python3 ci/fetch-test-kanata.py /tmp/kanata-validator
-          export PATH="/tmp/kanata-validator:$PATH"
+          chmod +x ci/kanata
+          export PATH="$PWD/ci:$PATH"
           sha256sum -c *.sha256
           tar -xzf kanata-studio-rust-*-linux-x86_64.tar.gz
           python3 kanata-studio-rust-*-linux-x86_64/install.py --prefix /tmp/studio-install
