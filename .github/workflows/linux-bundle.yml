@@ -50,6 +50,7 @@ jobs:
         run: |
           ./package.sh
           python3 tools/check-package.py
+          python3 tools/package-plugin.py --skip-validation
           python3 - <<'PY'
           import json
           import pathlib
@@ -68,6 +69,8 @@ jobs:
           path: |
             dist/kanata-studio-rust-*-linux-x86_64.tar.gz
             dist/kanata-studio-rust-*-linux-x86_64.tar.gz.sha256
+            dist/kanata-studio-plugin-*-linux-x86_64.tar.gz
+            dist/kanata-studio-plugin-*-linux-x86_64.tar.gz.sha256
             dist/install.py
             dist/ci/kanata
           if-no-files-found: error

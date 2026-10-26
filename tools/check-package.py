@@ -3,14 +3,17 @@
 import hashlib
 import json
 import os
+import platform
 from pathlib import Path
 import subprocess
 import sys
 import tarfile
 import tempfile
+import tomllib
 
 root = Path(__file__).resolve().parents[1]
-archive = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else root / "dist/kanata-studio-rust-0.2.0-linux-x86_64.tar.gz"
+version = tomllib.loads((root / "Cargo.toml").read_text())["package"]["version"]
+archive = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else root / f"dist/kanata-studio-rust-{version}-linux-{platform.machine()}.tar.gz"
 checksum = Path(str(archive)+".sha256").read_text().split()[0]
 assert hashlib.sha256(archive.read_bytes()).hexdigest() == checksum
 env = dict(os.environ, QT_QPA_PLATFORM="offscreen", QT_QPA_PLATFORMTHEME="")
