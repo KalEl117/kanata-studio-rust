@@ -44,7 +44,7 @@ jobs:
       - name: Build pinned upstream Kanata validator for package tests
         run: |
           rustup toolchain install stable --profile minimal
-          cargo +stable install --git https://github.com/jtroo/kanata --tag v1.12.0 --locked --root /tmp/kanata-validator --bin kanata
+          cargo +stable install --git https://github.com/jtroo/kanata --tag v1.12.0 --locked --root /tmp/kanata-validator --bin kanata kanata
           echo /tmp/kanata-validator/bin >> "$GITHUB_PATH"
       - name: Build and verify relocatable package
         run: |
