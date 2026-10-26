@@ -29,19 +29,17 @@ Erneutes Ausführen aktualisiert die Installation. Ohne Omarchy wird nur die
 App installiert; auf Omarchy zusätzlich das passende Plugin mit Aktivierung
 und Shell-Neustart.
 
-**Aktueller Release-Stand:** Das bestehende Release **v0.2.0** enthält weiterhin
-nur x86_64-Pakete mit **glibc 2.44+**. Der neue Installer kann diese Grenze
-nicht aufheben. Erst ein erfolgreich mit dem unten beschriebenen Workflow
-gebautes und veröffentlichtes Release liefert das breiter kompatible Paket.
-Für aarch64 kann der Installer passende Assets auswählen, sobald sie
-veröffentlicht sind; der Build-Workflow baut zunächst nur x86_64.
+**Ab v0.2.1:** Das x86_64-Paket benötigt **glibc 2.36+**. Das ältere
+Release v0.2.0 benötigte noch glibc 2.44. Für aarch64 kann der Installer
+passende Assets auswählen, sobald sie veröffentlicht sind; der Build-Workflow
+baut zunächst nur x86_64.
 
 Optionen:
 
 ```sh
 python3 install.py --check-only          # nur herunterladen und prüfen
 python3 install.py --app-only            # auch auf Omarchy nur die App
-python3 install.py --release v0.2.0       # bestimmtes Release auswählen
+python3 install.py --release v0.2.1       # bestimmtes Release auswählen
 python3 install.py --prefix ~/.local     # anderes App-Installationspräfix
 python3 install.py --no-restart          # Omarchy-Shell später neu starten
 ```
@@ -72,12 +70,12 @@ Das Omarchy-Plugin öffnet standardmäßig `~/.config/kanata/kanata.kbd`, ersatz
 
 App-Archiv und zugehörige `.sha256`-Datei unter
 [Releases](https://github.com/KalEl117/kanata-studio-rust/releases) herunterladen.
-Im Download-Verzeichnis, hier am Beispiel von v0.2.0:
+Im Download-Verzeichnis, hier am Beispiel von v0.2.1:
 
 ```sh
-sha256sum -c kanata-studio-rust-0.2.0-linux-x86_64.tar.gz.sha256
-tar -xzf kanata-studio-rust-0.2.0-linux-x86_64.tar.gz
-python3 kanata-studio-rust-0.2.0-linux-x86_64/install.py
+sha256sum -c kanata-studio-rust-0.2.1-linux-x86_64.tar.gz.sha256
+tar -xzf kanata-studio-rust-0.2.1-linux-x86_64.tar.gz
+python3 kanata-studio-rust-0.2.1-linux-x86_64/install.py
 ~/.local/bin/kanata-studio-rust
 ```
 
@@ -101,12 +99,14 @@ Ubuntu 24.04 und Fedora verwenden das fertige Paket ohne systemweit
 installiertes Qt. Das prüft keinen echten Wayland-/X11-Desktop und ersetzt
 keinen Grafiktreibertest auf den Zielsystemen.
 
-Nach einem erfolgreichen Lauf liegen Archiv, Prüfsumme und Download-Installer
+Nach einem erfolgreichen Lauf liegen App- und Plugin-Archiv, Prüfsummen und Download-Installer
 im Actions-Artefakt `linux-x86_64-glibc-2.36`. Der Workflow veröffentlicht kein
 Release automatisch. Für ein Release müssen diese Dateien mit der passenden
 Version aus `Cargo.toml` als Release-Assets hochgeladen werden. Auf Omarchy
 benötigt der automatische Installer außerdem das Plugin-Archiv derselben
-Version samt Prüfsumme; andernfalls `--app-only` verwenden. Die bisherigen
+Version samt Prüfsumme; andernfalls `--app-only` verwenden. Die CI baut das
+Plugin mit `--skip-validation`, weil dort Omarchy fehlt; auf dem Zielgerät
+wird es vor der Installation weiterhin durch Omarchy validiert. Die bisherigen
 lokalen Omarchy-Builds sind weiterhin möglich, behalten aber die glibc-Grenze
 des Build-Rechners.
 

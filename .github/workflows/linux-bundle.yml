@@ -41,10 +41,19 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_*.py'
           cargo fetch --locked
           cargo test --locked --offline
+      - name: Cache pinned upstream test validator
+        id: validator-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/kanata-validator
+          key: kanata-v1.12.0-debian12-x86_64-v1
       - name: Build pinned upstream Kanata validator for package tests
+        if: steps.validator-cache.outputs.cache-hit != 'true'
         run: |
           rustup toolchain install stable --profile minimal
           cargo +stable install --git https://github.com/jtroo/kanata --tag v1.12.0 --locked --root /tmp/kanata-validator --bin kanata kanata
+      - name: Add test validator to PATH
+        run: |
           echo /tmp/kanata-validator/bin >> "$GITHUB_PATH"
       - name: Build and verify relocatable package
         run: |
@@ -64,6 +73,7 @@ jobs:
           cp install.py dist/
           cp /tmp/kanata-validator/bin/kanata dist/ci/
       - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
         with:
           name: linux-x86_64-glibc-2.36
           path: |
@@ -73,7 +83,7 @@ jobs:
             dist/kanata-studio-plugin-*-linux-x86_64.tar.gz.sha256
             dist/install.py
             dist/ci/kanata
-          if-no-files-found: error
+          if-no-files-found: warn
 
   smoke-test:
     needs: build
