@@ -23,6 +23,9 @@ with tempfile.TemporaryDirectory(prefix="kanata-rust-package-check-") as folder:
     metadata = json.loads((bundle / "manifest.json").read_text())
     print(f"Paket: Qt {metadata['qt']}, glibc >= {metadata['minimumGlibc']}, {len(metadata['bundledLibraries'])} Bibliotheken", flush=True)
     subprocess.run([str(bundle / "launch.sh"), "--self-test"], env=env, check=True, timeout=30)
+    screenshot = relocated / "ui.png"
+    subprocess.run([str(bundle / "launch.sh"), "--screenshot", str(screenshot), str(bundle / "share/test.kbd")], env=env, check=True, timeout=30)
+    assert screenshot.is_file() and screenshot.stat().st_size > 0, "QML interface did not render"
     subprocess.run([sys.executable, str(root / "tools/check-recovery.py"), str(bundle / "launch.sh")], env=env, check=True, timeout=30)
     prefix = relocated / "installation with spaces"
     subprocess.run([sys.executable, str(bundle / "install.py"), "--prefix", str(prefix)], env=env, check=True, timeout=30)
