@@ -1,83 +1,96 @@
-# Kanata Studio als Omarchy-Plugin
+# Kanata Studio Omarchy plugin
 
-Vorbereitete erste Integrationsstufe: ein echtes Omarchy-Bar-Widget zeigt den
-Status von `kanata.service`. Linksklick öffnet und schließt ein kompaktes Popup
-mit Kanata-/Backend-Status, „Aktualisieren“ und „Studio öffnen“. Erst der
-Studio-Button öffnet die installierte Rust-App. Ein Klick außerhalb schließt
-das Popup; Position, Farben und Maße folgen der Omarchy-Bar und dem Theme.
-Die Tastatur verwendet die Geometrie der Studio-App, einschließlich ISO-Enter,
-Funktionstastengruppen und ThinkPad-Pfeiltasten. Ein Tastenklick öffnet den
-Bearbeitungsbereich für einfache Ausgaben, Tippen/Halten oder Kanata-Ausdrücke.
-Mit „Im Entwurf übernehmen“ wird die Eingabe angewendet, noch nicht die aktive
-Konfiguration verändert. Goldene Markierungen zeigen Änderungen. Rückgängig,
-Wiederherstellen und Verwerfen stehen im Popup bereit.
+[Deutsch](README.de.md) · [Main installation guide](../README.md)
 
-„Speichern“ prüft den Entwurf mit Kanata und kontrolliert, dass `kanata.service`
-diese Datei verwendet. Es schreibt atomar, lädt den Dienst neu und stellt bei
-Dienstfehlern die vorherige Datei wieder her. Externe Dateiänderungen und laufende
-Studio-Tastaturtests verhindern das Speichern. Die Ebenenauswahl schaltet keine
-aktive Tastaturebene um. Bei Durchlassen zeigt die Vorschau die erste Basis;
-zur Laufzeit gilt die jeweils aktive Basis. Nicht dargestellte Quelltasten
-erscheinen zusätzlich unter der Tastatur.
+The Omarchy bar widget shows the status of `kanata.service`. Left-click to open
+or close a compact popup with Kanata/backend status, refresh, and an option to
+open the installed Rust app. Clicking outside closes it. Position, colors, and
+sizing follow the Omarchy bar and theme.
 
-Angewendete Entwürfe werden unter `~/.local/state/kanata-studio-plugin/drafts`
-mit Dateirechten 0600 gesichert und beim Wiederöffnen nach einem Shell-Neustart
-wiederhergestellt. Der Undo-Verlauf gilt für die aktuelle Backend-Sitzung;
-nach einem Neustart bleibt der Entwurf, aber kein Undo-Verlauf erhalten. Noch
-nicht übernommene Feldtexte bleiben beim Schließen des Popups in derselben
-Shell-Sitzung erhalten. Vor einem Tasten-/Ebenenwechsel müssen sie übernommen
-oder zurückgesetzt werden. „Studio öffnen“ bleibt für den vollständigen Editor,
-Makro-Dialoge und den 30-Sekunden-Test verfügbar.
+The keyboard uses the Studio app's geometry, including ISO Enter, function-key
+groups, and ThinkPad arrow keys. Click a key to edit simple outputs, tap/hold
+actions, or Kanata expressions. Applying an edit updates the draft without
+changing the active configuration. Gold markers highlight changes. Undo, redo,
+and discard are available in the popup.
 
-`Backend.qml` betreibt den Rust-Helper als separaten Prozess, prüft Protokollversion
-1 und serialisiert Anfragen. Fehler und Zeitüberschreitungen werden angezeigt.
+Saving validates the draft with Kanata and checks that `kanata.service` uses the
+file. It writes atomically, reloads the service, and restores the previous file
+if reloading fails. External file changes and active Studio keyboard tests block
+saving. Selecting a layer in the editor does not switch the active keyboard
+layer. Passthrough previews use the first base layer; runtime behavior follows
+the currently active base. Source keys missing from the layout appear below it.
 
-## Bauen und prüfen
+Applied drafts are saved under `~/.local/state/kanata-studio-plugin/drafts` with
+0600 permissions and restored when reopening after a shell restart. Undo history
+belongs to the current backend session; drafts survive restarts, undo history
+does not. Unapplied field text is retained when closing the popup within the
+same shell session. Apply or reset it before switching keys or layers. Open the
+full Studio editor for macro dialogs and the 30-second test mode.
 
-Im Verzeichnis `rust-studio`:
+`Backend.qml` runs the Rust helper as a separate process, checks protocol
+version 1, and serializes requests. Errors and timeouts are displayed.
+
+## Install
+
+The [main download installer](../README.md#quick-installation) installs the
+matching plugin automatically on Omarchy. Kanata and a configured
+`kanata.service` user service are required for validation and saving.
+
+## Build and check
+
+From the repository root:
 
 ```sh
 python3 tools/prepare-omarchy-plugin.py
 python3 tools/check-omarchy-plugin.py
 ```
 
-Das erste Skript baut ausschließlich den Rust-Helper offline und legt das
-installierbare Verzeichnis unter `dist/omarchy-plugin/zoltan.kanata-studio` an.
-Es benötigt Cargo und den vorhandenen Cache sowie Omarchy für die Validierung.
-Die fertige Kopie braucht kein Rust, Cargo, Node oder eigenes Qt-Laufzeitpaket;
-die Oberfläche verwendet die vorhandene Omarchy-/Quickshell-Laufzeit. Das Binary
-muss für Architektur und glibc des Zielsystems gebaut sein. Die Statusabfrage
-braucht systemd; der Launcher die separat installierte Rust-App.
-Es wird nichts in die laufende Shell installiert oder aktiviert.
+The first script builds only the Rust helper offline and prepares the installable
+directory at `dist/omarchy-plugin/zoltan.kanata-studio`. It requires Cargo, cached
+dependencies, and Omarchy for validation. The finished plugin does not require
+Rust, Cargo, Node, or a separate Qt runtime: it uses the existing
+Omarchy/Quickshell runtime. The binary must match the target architecture and
+glibc version. Status queries require systemd; opening the full editor requires
+the separately installed Rust app. Building does not install or activate the
+plugin in the running shell.
 
-Für eine spätere lokale Installation das fertige Verzeichnis **kopieren** nach
-`~/.config/omarchy/plugins/zoltan.kanata-studio` (keine Symlinks), dann:
+To install the prepared plugin:
+
+```sh
+python3 tools/install-plugin.py --source dist/omarchy-plugin/zoltan.kanata-studio --enable
+omarchy restart shell
+```
+
+Alternatively, **copy** the prepared directory to
+`~/.config/omarchy/plugins/zoltan.kanata-studio` without symlinks, then run:
 
 ```sh
 omarchy-shell shell rescanPlugins
 omarchy plugin enable zoltan.kanata-studio --section right
 ```
 
-Optionaler Pfad zum Editor im betreffenden `shell.json`-Bar-Eintrag:
+To use a custom editor path, set `studioExecutable` in the corresponding
+`shell.json` bar entry:
 
 ```json
-{"id":"zoltan.kanata-studio", "studioExecutable":"/absoluter/pfad/kanata-studio-rust"}
+{"id":"zoltan.kanata-studio", "studioExecutable":"/absolute/path/to/kanata-studio-rust"}
 ```
 
-Für eine andere gespeicherte Konfiguration kann im selben Eintrag `configPath`
-auf einen absoluten `.kbd`-Pfad gesetzt werden. Ohne diesen Wert verwendet die
-Übersicht `~/.config/kanata/kanata.kbd`, ersatzweise `config.kbd`.
+To open a different saved configuration, set `configPath` to an absolute `.kbd`
+path in the same entry. Without it, the overview uses
+`~/.config/kanata/kanata.kbd`, falling back to `config.kbd`.
 
-## Backend verwenden
+## Use the backend
 
-`kanata-studio-helper` ohne Argumente behält die bisherige Einmalanfrage bei.
-Mit `--serve` liest es eine JSON-Anfrage pro Zeile und schreibt sofort eine
-JSON-Antwort pro Zeile; stdin bleibt geöffnet. `id` wird unverändert übernommen.
-Leerzeilen werden ignoriert, ungültige Anfragen liefern `ok:false`.
-Alle bestehenden Kernoperationen bleiben verfügbar. `source` muss bei direkten
-Aufrufen mitgegeben werden; die QML-Anbindung ergänzt ihn aus der letzten Antwort.
-`overview` liest die Datei unter `path` (optional) und liefert unabhängig vom
-Editorverlauf alle Ebenenansichten, normalisierte Tastennamen und Layoutdaten.
+Without arguments, `kanata-studio-helper` handles one request. With `--serve`, it
+reads one JSON request per line and immediately writes one JSON response per
+line, keeping stdin open. The request `id` is echoed unchanged. Blank lines are
+ignored; invalid requests return `ok:false`.
+
+All existing core operations remain available. Direct calls must supply `source`;
+the QML integration adds it from the last response. `overview` reads the file at
+an optional `path` and returns all layer views, normalized key names, and layout
+data independently of editor history.
 
 ```json
 {"id":1,"op":"ping"}
@@ -85,28 +98,30 @@ Editorverlauf alle Ebenenansichten, normalisierte Tastennamen und Layoutdaten.
 {"id":3,"op":"setAction","source":"(defsrc a)\n(deflayer base a)\n","expression":"esc"}
 ```
 
-In QML nach `ready === true`:
+In QML, once `ready === true`:
 
 ```js
-backend.loadSource(text) // Verlauf leeren, Dokument laden
+backend.loadSource(text) // Clear history and load the document
 backend.request({op: "select", layer: 0, key: 0})
 backend.request({op: "setAction", expression: "esc"})
 backend.request({op: "undo"})
 ```
 
-Antworten kommen über `replied(requestId, response)`, Fehler über
-`failed(requestId, message)`. `source`, `view`, `canUndo` und `canRedo` spiegeln
-erfolgreiche Antworten. Für den Editor muss erst ein gültiges Dokument geladen
-werden. Lange Preview-Worker gehören in einen **eigenständigen Prozess**, nicht
-in die serielle Editorverbindung. Die `plugin*`-Operationen verwalten einen eigenen
-Editorzustand: `pluginOpen`, `pluginSelect`, `pluginLayer`, `pluginSetAction`,
-`pluginSetTapHold`, `pluginUndo`, `pluginRedo`, `pluginDiscard`, `pluginSave`.
-Antworten liefern `document` mit Ebenenansichten, Auswahl, Aktionen und Entwurfsstatus.
-Die Sicherung eines Entwurfs schreibt nur die Zustandsdatei; ausschließlich
-`pluginSave` verändert die Kanata-Datei und lädt den Dienst neu.
+Responses arrive through `replied(requestId, response)`; errors use
+`failed(requestId, message)`. `source`, `view`, `canUndo`, and `canRedo` reflect
+successful responses. Load a valid document before using the editor. Long-running
+preview workers belong in a **separate process**, outside the serial editor
+connection.
 
-## Weitere Ausbauschritte
+The `plugin*` operations maintain their own editor state: `pluginOpen`,
+`pluginSelect`, `pluginLayer`, `pluginSetAction`, `pluginSetTapHold`, `pluginUndo`,
+`pluginRedo`, `pluginDiscard`, and `pluginSave`. Responses include a `document`
+with layer views, selection, actions, and draft status. Saving a draft writes
+only its state file; only `pluginSave` changes the Kanata file and reloads the
+service.
 
-- Visuellen Ausgabepicker und Makro-Dialog aus der Studio-App übernehmen.
-- 30-Sekunden-Test mit eigenständigem Preview-Worker und Recovery anbinden.
-- Weitere Layouts und größere Multi-Monitor-Sitzungen prüfen.
+## Planned improvements
+
+- Bring the visual output picker and macro dialog from the Studio app into the popup.
+- Integrate the 30-second test with a separate preview worker and recovery.
+- Check additional layouts and larger multi-monitor sessions.

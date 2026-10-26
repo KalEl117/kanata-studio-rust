@@ -1,76 +1,80 @@
 # Kanata Studio Rust
 
-Grafischer Editor für vorhandene Kanata-Konfigurationen mit Rust-Kern,
-Qt-Quick-App und einem Omarchy-Plugin. Die Mini-Tastatur im Bar-Popup unterstützt
-Tastenbearbeitung, Tippen/Halten, Kanata-Code, Rückgängig und Speichern.
-Der vollständige Editor bietet zusätzlich Makros und einen 30-Sekunden-Test.
+[Deutsch](README.de.md)
 
-## Unter Linux installieren
+A graphical editor for existing Kanata configurations, with a Rust core, a
+Qt Quick desktop app, and an optional Omarchy plugin. The bar popup provides a
+compact keyboard editor with tap/hold actions, Kanata expressions, undo, and
+saving. The full editor also includes macros and a 30-second test mode.
 
-Die eigenständige App benötigt weder Omarchy noch Hyprland. Sie kann unter
-Wayland oder X11 laufen; Qt und QML werden im Download-Paket mitgeliefert.
-Installiert wird für den aktuellen Benutzer ohne `sudo`.
+## Install on Linux
 
-### Einfacher Download-Installer
+The standalone app runs on Wayland or X11 and does not require Omarchy or
+Hyprland. Download packages include Qt and QML. Installation is per user and
+does not require `sudo`.
 
-Voraussetzungen: Linux mit glibc, Python 3.10+ und ein veröffentlichtes Paket
-für die eigene Architektur. GitHub-Konto, GitHub CLI, Rust und Compiler sind
-für die Installation nicht erforderlich.
+### Quick installation
+
+Requirements: Linux with glibc, Python 3.10+, and a published package for your
+CPU architecture. You do not need a GitHub account, GitHub CLI, Rust, or a compiler.
 
 ```sh
 curl -fL https://raw.githubusercontent.com/KalEl117/kanata-studio-rust/main/install.py -o install.py
 python3 install.py
 ```
 
-Alternativ `install.py` im Browser aus diesem Repository herunterladen und mit
-Python starten. Das Skript lädt das neueste stabile GitHub-Release, prüft alle
-SHA-256-Prüfsummen, entpackt die Pakete und legt einen App-Launcher an.
-Erneutes Ausführen aktualisiert die Installation. Ohne Omarchy wird nur die
-App installiert; auf Omarchy zusätzlich das passende Plugin mit Aktivierung
-und Shell-Neustart.
+You can also download `install.py` from this repository in your browser and run
+it with Python. The installer downloads the latest stable GitHub release,
+verifies all SHA-256 checksums, extracts the packages, and adds an application
+launcher. Run it again to update an existing installation.
 
-**Ab v0.2.1:** Das x86_64-Paket benötigt **glibc 2.36+**. Das ältere
-Release v0.2.0 benötigte noch glibc 2.44. Für aarch64 kann der Installer
-passende Assets auswählen, sobald sie veröffentlicht sind; der Build-Workflow
-baut zunächst nur x86_64.
+On other Linux desktops, it installs the app only. On Omarchy, it also installs
+and enables the matching plugin and restarts the shell.
 
-Optionen:
+**Since v0.2.1:** The x86_64 package requires **glibc 2.36+**. The previous
+v0.2.0 release required glibc 2.44. The installer can select aarch64 assets when
+available, but the current build workflow produces x86_64 packages only.
+
+Options:
 
 ```sh
-python3 install.py --check-only          # nur herunterladen und prüfen
-python3 install.py --app-only            # auch auf Omarchy nur die App
-python3 install.py --release v0.2.1       # bestimmtes Release auswählen
-python3 install.py --prefix ~/.local     # anderes App-Installationspräfix
-python3 install.py --no-restart          # Omarchy-Shell später neu starten
+python3 install.py --check-only          # Download and verify without installing
+python3 install.py --app-only            # Skip the plugin, including on Omarchy
+python3 install.py --release v0.2.1       # Select a specific release
+python3 install.py --prefix ~/.local     # Choose the app installation prefix
+python3 install.py --no-restart          # Restart the Omarchy shell manually later
 ```
 
-Das Paket bestimmt seine Mindest-glibc-Version in `manifest.json`. Ein
-unpassendes Paket wird vor der Installation mit Angabe der benötigten und
-vorhandenen Version abgelehnt. Alpine/musl benötigt einen eigenen Build.
+Each package declares its minimum glibc version in `manifest.json`. Incompatible
+packages are rejected before installation, showing the required and installed
+versions. Alpine/musl systems need a separate source build.
 
-Standardpfade sind `~/.local/share/kanata-studio-rust`,
-`~/.local/share/applications/kanata-studio-rust.desktop` und
-`~/.local/bin/kanata-studio-rust`. Falls `~/.local/bin` nicht im `PATH` steht,
-kann die App über den App-Launcher oder den vollständigen Pfad starten.
+Default installation paths:
 
-### Was zusätzlich für Kanata nötig ist
+- App: `~/.local/share/kanata-studio-rust`
+- Desktop entry: `~/.local/share/applications/kanata-studio-rust.desktop`
+- Command: `~/.local/bin/kanata-studio-rust`
 
-Die App und das Plugin installieren weder Kanata noch einen Tastaturdienst
-und übertragen keine persönliche Tastaturbelegung. Zum Prüfen, Speichern und
-Live-Testen benötigt die App Kanata sowie einen eingerichteten
-**systemd-Benutzerdienst `kanata.service`**, der die geöffnete Konfiguration
-verwendet. Ein ausschließlich systemweiter Kanata-Dienst genügt dem aktuellen
-Dienstmodell nicht. Ein automatischer Kanata-/Berechtigungsassistent ist noch
-nicht enthalten.
+If `~/.local/bin` is not in your `PATH`, use the application launcher or the full
+command path.
 
-Das Omarchy-Plugin öffnet standardmäßig `~/.config/kanata/kanata.kbd`, ersatzweise
-`~/.config/kanata/config.kbd`. Details: [Plugin-Anleitung](omarchy-plugin/README.md).
+### Set up Kanata separately
 
-### Archiv ohne Download-Installer verwenden
+The app and plugin do not install Kanata, configure keyboard permissions, set up
+a keyboard service, or transfer your personal keymap. To validate, save, and
+live-test configurations, you need Kanata and a configured **systemd user service
+named `kanata.service`** that uses the configuration file you open in the editor.
+The current service integration does not support a system-wide Kanata service
+on its own. An automatic Kanata and permissions setup wizard is not included.
 
-App-Archiv und zugehörige `.sha256`-Datei unter
-[Releases](https://github.com/KalEl117/kanata-studio-rust/releases) herunterladen.
-Im Download-Verzeichnis, hier am Beispiel von v0.2.1:
+The Omarchy plugin opens `~/.config/kanata/kanata.kbd` by default, falling back to
+`~/.config/kanata/config.kbd`. See the [plugin guide](omarchy-plugin/README.md).
+
+### Install an archive manually
+
+Download the app archive and its matching `.sha256` file from
+[Releases](https://github.com/KalEl117/kanata-studio-rust/releases).
+For example, for v0.2.1, run these commands in your download directory:
 
 ```sh
 sha256sum -c kanata-studio-rust-0.2.1-linux-x86_64.tar.gz.sha256
@@ -79,53 +83,52 @@ python3 kanata-studio-rust-0.2.1-linux-x86_64/install.py
 ~/.local/bin/kanata-studio-rust
 ```
 
-Alternativ lässt sich `launch.sh` direkt aus dem entpackten Ordner starten.
-Python wird nur für die Installation benötigt. Das Paket enthält Qt,
-QML-Module, Plattform-Plugins und die benötigten Laufzeitbibliotheken.
-Grafiktreiber und eine Wayland- oder X11-Sitzung stellt das Zielsystem bereit.
+Alternatively, run `launch.sh` directly from the extracted directory. Python is
+only needed for installation. The bundle includes Qt, QML modules, platform
+plugins, and required runtime libraries. Your system provides graphics drivers
+and a Wayland or X11 session.
 
-## Pakete für andere Distributionen bauen
+## Build packages for other distributions
 
-[Portable Linux bundle](.github/workflows/linux-bundle.yml) baut die App
-auf Debian 12 mit Qt 6.4 und prüft, dass die gemessene Mindestversion von glibc
-höchstens 2.36 beträgt. Diese Basis soll unter anderem Debian 12+, Ubuntu
-24.04+/entsprechende Mint-Versionen, Fedora und Arch erreichen. Ubuntu 22.04
-mit glibc 2.35 liegt außerhalb dieser Build-Basis.
+The [Portable Linux bundle workflow](.github/workflows/linux-bundle.yml) builds
+on Debian 12 with Qt 6.4 and checks that the measured minimum glibc version is no
+higher than 2.36. This baseline targets Debian 12+, Ubuntu 24.04+ and corresponding
+Linux Mint versions, Fedora, and Arch. Ubuntu 22.04, with glibc 2.35, is outside
+this build baseline.
 
-Der Workflow läuft für Pull Requests, `main`, Versionstags und manuell. Er
-prüft das entpackte Paket, eine Installation in einem temporären Verzeichnis
-und die Wiederherstellung. Zusätzliche Container-Starttests unter Debian 12,
-Ubuntu 24.04 und Fedora verwenden das fertige Paket ohne systemweit
-installiertes Qt. Das prüft keinen echten Wayland-/X11-Desktop und ersetzt
-keinen Grafiktreibertest auf den Zielsystemen.
+The workflow runs on pull requests, `main`, version tags, and manual dispatch. It
+checks the extracted bundle, installation in a temporary directory, and preview
+recovery. Additional container tests on Debian 12, Ubuntu 24.04, and Fedora run
+the finished package without system Qt. These checks do not exercise a real
+Wayland/X11 desktop or replace graphics-driver testing on target machines.
 
-Nach einem erfolgreichen Lauf liegen App- und Plugin-Archiv, Prüfsummen und Download-Installer
-im Actions-Artefakt `linux-x86_64-glibc-2.36`. Der Workflow veröffentlicht kein
-Release automatisch. Für ein Release müssen diese Dateien mit der passenden
-Version aus `Cargo.toml` als Release-Assets hochgeladen werden. Auf Omarchy
-benötigt der automatische Installer außerdem das Plugin-Archiv derselben
-Version samt Prüfsumme; andernfalls `--app-only` verwenden. Die CI baut das
-Plugin mit `--skip-validation`, weil dort Omarchy fehlt; auf dem Zielgerät
-wird es vor der Installation weiterhin durch Omarchy validiert. Die bisherigen
-lokalen Omarchy-Builds sind weiterhin möglich, behalten aber die glibc-Grenze
-des Build-Rechners.
+After a successful run, the `linux-x86_64-glibc-2.36` Actions artifact contains
+the app and plugin archives, checksums, and download installer. The workflow does
+not publish releases automatically. Upload these files as release assets using
+the matching version from `Cargo.toml`.
 
-Qt sucht Module und Plugins über `qt.conf`; siehe
-[Qt-Dokumentation](https://doc.qt.io/qt-6/qt-conf.html). Die Bibliotheken werden
-dynamisch geladen; verfügbare Distributions-Lizenztexte werden unter
-`licenses/` mitgeliefert. Native Hilfsprogramme wie Kanata und systemctl
-verwenden weiterhin ihre ursprüngliche Bibliotheksumgebung.
+On Omarchy, the download installer also needs the plugin archive and checksum
+for the same release; otherwise, use `--app-only`. CI packages the plugin with
+`--skip-validation` because Omarchy is not installed there. The target machine
+still validates the plugin with Omarchy before installation. Local builds on
+Omarchy remain supported, but inherit the build machine's glibc requirement.
 
-`~/.local/bin/kanata-studio-rust --display-check` zeigt Fensterprotokoll und
-Bildschirmskalierung. Qt 6 übernimmt die Skalierung automatisch; ein zusätzliches
-`QT_SCALE_FACTOR` multipliziert sie nochmals ([Qt High DPI](https://doc.qt.io/qt-6/highdpi.html)).
+Qt locates its modules and plugins through `qt.conf`; see the
+[Qt documentation](https://doc.qt.io/qt-6/qt-conf.html). Libraries are loaded
+dynamically, and available distribution license notices are included under
+`licenses/`. Native tools such as Kanata and systemctl retain their original
+library environment.
 
-### Aus dem Quellcode bauen
+Run `~/.local/bin/kanata-studio-rust --display-check` to inspect the windowing
+protocol and per-screen scaling. Qt 6 handles scaling automatically; setting
+`QT_SCALE_FACTOR` multiplies it again. See [Qt High DPI](https://doc.qt.io/qt-6/highdpi.html).
 
-Benötigt werden Git, Python 3.11+, Rust 1.88+, Cargo, ein C++-Compiler,
-make, qmake6 und Qt 6.4+ mit Quick/Quick Controls 2/Concurrent.
+### Build from source
 
-Auf Debian 12 / Ubuntu 24.04:
+Requirements: Git, Python 3.11+, Rust 1.88+, Cargo, a C++ compiler, make, qmake6,
+and Qt 6.4+ with Quick, Quick Controls 2, and Concurrent.
+
+On Debian 12 / Ubuntu 24.04:
 
 ```sh
 sudo apt install git python3 build-essential qt6-base-dev qt6-declarative-dev qt6-wayland \
@@ -135,14 +138,14 @@ sudo apt install git python3 build-essential qt6-base-dev qt6-declarative-dev qt
   qml6-module-qtqml-workerscript qml6-module-qt-labs-settings qml6-module-qt-labs-platform
 ```
 
-Auf Arch/Omarchy:
+On Arch/Omarchy:
 
 ```sh
 sudo pacman -S --needed git python base-devel rust qt6-base qt6-declarative qt6-wayland
 ```
 
-Rust 1.88+ muss zusätzlich vorhanden sein, etwa über eine vorhandene rustup-
-Installation. Nach dem Klonen:
+Make sure Rust 1.88+ is available, for example through an existing rustup
+installation. Then clone and build:
 
 ```sh
 git clone https://github.com/KalEl117/kanata-studio-rust.git
@@ -153,7 +156,7 @@ cargo fetch --locked
 ./package.sh --install
 ```
 
-Für das Omarchy-Plugin zusätzlich:
+To install the Omarchy plugin as well:
 
 ```sh
 python3 tools/prepare-omarchy-plugin.py
@@ -161,53 +164,99 @@ python3 tools/install-plugin.py --source dist/omarchy-plugin/zoltan.kanata-studi
 omarchy restart shell
 ```
 
-## Entwicklung starten und bauen
+## Development
 
-Voraussetzungen zum Bauen: Rust 1.88 oder neuer, Cargo, Qt 6 Quick/Quick Controls 2/Concurrent, `qmake6`, `make`, Python 3 und ein C++-Compiler. Auf einem neuen Rechner zuerst `cargo fetch --locked` ausführen.
+Install the build dependencies above and run `cargo fetch --locked` on a new
+machine before starting development.
 
 ```sh
 cd kanata-studio-rust
 ./run.sh
 ```
 
-Optional eine `.kbd`-Datei angeben. Ohne Argument wird `~/.config/kanata/kanata.kbd` oder `config.kbd` geöffnet. Es wird keine neue Konfiguration erzeugt. `run.sh` startet die vorhandene ausführbare Datei direkt; es baut nur beim ersten Start oder nach Änderungen an Quellcode, Build-Dateien oder QML. `./build.sh` erzwingt die Build-Prüfung. Die Abhängigkeiten werden dabei aus `Cargo.lock` offline verwendet.
+You can pass a `.kbd` file as an argument. Without one, the app opens
+`~/.config/kanata/kanata.kbd` or `config.kbd`; it does not create a configuration.
+`run.sh` launches the existing executable and builds only on first launch or
+after changes to source, build files, or QML. `./build.sh` always runs the build
+checks. Builds use dependencies from `Cargo.lock` offline.
 
 ```sh
-./package.sh           # Laufzeitpaket und Prüfsumme erzeugen
-./package.sh --install # zusätzlich für den aktuellen Benutzer installieren
+./package.sh           # Create a runtime bundle and checksum
+./package.sh --install # Also install it for the current user
 ```
 
-Das Paketwerkzeug benötigt Linux, Python 3.11 oder neuer, `ldd`, `readelf` und die vorhandene Qt-Installation. Auf diesem Arch/Omarchy-System werden verfügbare Distributions-Lizenztexte zusätzlich über die Paketdatenbank übernommen.
+The packaging tool requires Linux, Python 3.11+, `ldd`, `readelf`, and an existing
+Qt installation. Available distribution license notices are collected from the
+package database on Arch/Omarchy and Debian.
 
-Die Oberfläche liegt eigenständig unter `ui/main.qml` und `ui/ActionPanel.qml` und wird beim Bauen übernommen. Kleine Anpassungen binden die Tastenbeschriftungen an das vorbereitete Rust-Modell; die ursprünglichen QML-Dateien werden dabei nicht verändert.
+The UI lives in `ui/main.qml` and `ui/ActionPanel.qml`. During the build, small
+adaptations bind key labels to the prepared Rust model without modifying these
+source QML files.
 
-## Bedienung und Datenmodell
+## Editing and data model
 
-Jede verfügbare Taste lässt sich direkt per Klick auswählen, ohne einen Entwurf oder Verlaufseintrag zu erzeugen. Erst eine geänderte Ausgabe, ein Tap Hold oder ein Makro fügt eine bisher fehlende Taste zur gemeinsamen Tastenliste und allen Ebenen hinzu. Hinzufügen und erste Belegung bilden einen einzigen Schritt für Rückgängig/Wiederherstellen; die Auswahl bleibt dabei erhalten. Die anderen Ebenen starten mit Durchlassen (`_`). Erst Testen oder Speichern ändert die aktive Konfiguration.
+Clicking a key selects it without creating a draft or a history entry. A missing
+key is added to the shared key list and all layers only when you assign an
+output, tap/hold action, or macro. Adding it and making its first assignment is
+one undo/redo step, and selection is preserved. Other layers start with
+passthrough (`_`). Only testing or saving changes the active configuration.
 
-Die Tastatur und das Bearbeitungspanel unterscheiden normale Funktion, eigene Belegung und von der Basis übernommene Belegung. Normale Tasten sind genauso gut lesbar und auswählbar wie konfigurierte Tasten. Bei Durchlassen zeigt der Editor die Belegung der ersten Basis als Vorschau und benennt deren Herkunft; zur Laufzeit folgt die Ausgabe der tatsächlich aktiven Basis.
+The keyboard and editing panel distinguish normal behavior, custom assignments,
+and assignments inherited from the base layer. Unconfigured keys remain readable
+and selectable. For passthrough, the editor previews the first base layer and
+shows its origin; runtime output follows the currently active base layer.
 
-Tasten mit Änderungen gegenüber der gespeicherten Belegung erhalten im Layout eine goldene Kontur und einen Punkt. Beim Darüberfahren zeigt „Vorher (gespeichert) → Nachher (Entwurf)“ die alte und neue Ausgabe, einschließlich Tipp-/Halteaktionen. Neue Tasten und neue Ebenen werden kenntlich gemacht. Änderungen an einer übernommenen Basisbelegung sind auch auf durchlassenden Ebenen sichtbar. Rückgängig und Speichern aktualisieren die Markierungen; Kommentare und reine Formatierung erzeugen keine Tastenmarkierung.
+Keys that differ from the saved configuration have a gold outline and a dot.
+Hovering shows the saved and draft outputs, including tap/hold actions. New keys
+and layers are marked. Changes to an inherited base assignment also appear on
+passthrough layers. Undo and saving update these markers; comments and formatting
+changes alone do not mark keys as changed.
 
-Tippen/Halten-Belegungen zeigen direkt auf jeder Taste zwei konkrete Zeilen, etwa „Tippen: Esc“ und „Halten: special wechseln“. Temporär gehaltene Ebenen werden als „special halten“ unterschieden. Eingebettete Aktionen und die Basisvorschau erhalten dieselben Beschriftungen. Ein Hinweis beim Darüberfahren zeigt längere Beschriftungen vollständig.
+Tap/hold assignments show separate tap and hold descriptions on each key, such
+as tapping Esc and holding a layer switch. Temporarily held layers are identified
+as such. Embedded actions and base previews use the same labels, and tooltips
+show longer descriptions in full.
 
-Die Ausgabeauswahl verwendet gültige, groß-/kleinschreibungsabhängige Kanata-Tastennamen auch für Sonderzeichen und Kombinationen mit Umschalt/AltGr. Auf deutschem Layout bedeutet `Slash` die physische Minus-Taste und `Minus` die ß-Taste.
+The output picker uses valid, case-sensitive Kanata key names, including symbols
+and Shift/AltGr combinations. On a German layout, `Slash` means the physical minus
+key and `Minus` means the ß key.
 
-Rust verwaltet die ausgewählte Taste und Ebene. Das geparste Dokument bleibt bei Auswahländerungen im Speicher. Die Oberfläche liest vorbereitete Aktionen, Beschriftungen und Aktionsdetails; mehrere Zugriffe auf dieselben Felder lösen kein erneutes Parsen aus. Dokument, Auswahl, Aktionen, Farben, Status und Countdown haben getrennte Änderungssignale. Die Tastaturansicht wird dadurch bei einem Statuswechsel oder Countdown-Schritt nicht neu aufgebaut.
+Rust manages the selected key and layer. The parsed document stays in memory
+when selection changes. The UI reads prepared actions, labels, and action details;
+repeated field access does not reparse the document. Document, selection, actions,
+colors, status, and countdown have separate change signals, so status and countdown
+updates do not rebuild the keyboard view.
 
-Die regelmäßige Layout-/Geräte-/Theme-Abfrage läuft außerhalb des GUI-Threads. Die erste Erkennung erfolgt vor dem Öffnen des Fensters. Deutsch, Englisch US, Englisch UK, ThinkPad sowie automatische Erkennung bleiben verfügbar. Die Layout-Auswahl wird unter `~/.config/kanata-studio-rust/settings.json` gespeichert; eine vorhandene Auswahl aus dem ersten Qt/Rust-Prototyp wird übernommen. Die Sprach- und Panel-Einstellungen der Oberfläche bleiben in Qt.
+Periodic layout, device, and theme detection runs outside the GUI thread. Initial
+detection runs before the window opens. German, US English, UK English, ThinkPad,
+and automatic detection are available. Layout selection is stored in
+`~/.config/kanata-studio-rust/settings.json`; an existing selection from the first
+Qt/Rust prototype is migrated. UI language and panel settings remain in Qt.
 
-Kommentare und unberührte Dateibereiche bleiben erhalten. Beim Umbenennen werden direkte Ebenenverweise angepasst. Ebenen mit verbleibenden direkten Verweisen können nicht gelöscht werden. Indirekte Verweise über Variablen oder Alias-Konstruktionen benötigen die abschließende Kanata-Prüfung.
+Comments and untouched file sections are preserved. Renaming a layer updates
+direct references. Layers with remaining direct references cannot be deleted.
+Indirect references through variables or aliases still require final validation
+with Kanata.
 
-## Speichern und Testmodus
+## Saving and test mode
 
-Prüfen verwendet eine temporäre Datei im Konfigurationsverzeichnis und begrenzt die Laufzeit des Kanata-Prozesses. Speichern schreibt atomar mit den bisherigen Dateirechten. Externe Änderungen werden erkannt; schlägt das Dienstneuladen fehl, wird die ursprüngliche Datei wiederhergestellt.
+Validation uses a temporary file in the configuration directory and limits the
+Kanata process runtime. Saving writes atomically with the original permissions.
+External changes are detected; if reloading the service fails, the original file
+is restored.
 
-Der 30-Sekunden-Test läuft in einem eigenen Prozess. Ablauf, Abbruch und Wiederherstellung nach einer Unterbrechung liegen in Rust. `kanata-studio-rust-recover.service` verwendet `~/.local/state/kanata-studio-rust/preview`, läuft vor `kanata.service` und startet den Launcher mit `--recover-preview`. Die Diensteinrichtung wird nur bei Änderungen oder einer vorherigen unvollständigen Einrichtung wiederholt. Auf unterbrochene Tests wird bei jedem normalen Start geprüft.
+The 30-second test runs in a separate process. Rust handles expiry, cancellation,
+and recovery after interruptions. `kanata-studio-rust-recover.service` uses
+`~/.local/state/kanata-studio-rust/preview`, runs before `kanata.service`, and starts
+the launcher with `--recover-preview`. Service setup is repeated only when needed
+after changes or incomplete setup. Every normal startup checks for interrupted
+tests.
 
-Nach einer Wiederherstellung beim App-Start lädt der Editor die wiederhergestellte Datei neu. Extern veränderte Dateien werden nicht überschrieben; die Wiederherstellungsdaten bleiben zur Klärung erhalten. Während eines Tests oder beim Speichern sollte keine andere Studio-Version dieselbe Datei bearbeiten.
+After startup recovery, the editor reloads the restored file. Externally changed
+files are not overwritten, and recovery data is retained for investigation.
+Avoid editing the same file with another Studio version while saving or testing.
 
-## Prüfungen
+## Checks
 
 ```sh
 ~/.cargo/bin/cargo test --locked --offline
@@ -218,22 +267,38 @@ python3 tools/check-recovery.py
 python3 tools/check-package.py
 ```
 
-Die Rust-Tests decken Parser, Bearbeitung, Auswahl, Erkennung, Einstellungen, atomisches Speichern, Dienstfehler und Wiederherstellung ab. Der Qt-Selbsttest verwendet standardmäßig `tests/fixtures/wrapped-layout.kbd` und temporäre Kopien mit einem simulierten Dienst. `check-recovery.py` aktiviert eine temporäre Konfiguration, beendet den echten Testprozess mit SIGKILL und prüft die normale Wiederherstellung beim nächsten App-Start, den korrekten Editorinhalt und den Schutz externer Änderungen. Die Tests verändern weder die aktive Tastaturkonfiguration noch den echten Kanata-Dienst.
+Rust tests cover parsing, editing, selection, detection, settings, atomic saving,
+service failures, and recovery. The Qt self-test uses
+`tests/fixtures/wrapped-layout.kbd` by default and temporary copies with a simulated
+service. `check-recovery.py` activates a temporary configuration, kills the real
+test process with SIGKILL, and checks recovery on the next startup, editor contents,
+and protection of external changes. These tests do not modify the active keyboard
+configuration or the real Kanata service.
 
-Derselbe Wiederherstellungstest kann gegen ein entpacktes oder installiertes Paket laufen: `python3 tools/check-recovery.py /pfad/zum/launch.sh`. Der Installer und der Paket-Launcher werden zusätzlich nach einer Installation in ein temporäres Verzeichnis geprüft.
+You can run the recovery check against an extracted or installed bundle:
+`python3 tools/check-recovery.py /path/to/launch.sh`. Package checks also exercise
+the installer and launcher after installation in a temporary directory.
 
-## Messungen
+## Measurements
 
 ```sh
 QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= ./run.sh --benchmark-ui tests/fixtures/wrapped-layout.kbd
 KANATA_STUDIO_STARTUP_PROFILE=1 ./run.sh
 ```
 
-Der Bedienungstest prüft zusätzlich den QML-Ablauf für die Auswahl einer fehlenden Taste, ihre erste Belegung und vollständiges Rückgängig/Wiederherstellen. Er misst 60 Tastenauswahlen, Ebenenwechsel und Makroänderungen mit Undo einschließlich der Aktualisierung des grafischen Editors. Er verwirft alle Entwürfe und schreibt keine Konfiguration. Gemessen wird die Bearbeitung der Aufrufe und der unmittelbaren Qt/QML-Aktualisierungen; die Zeiten sind keine vollständige Messung der Eingabe-bis-Bildschirm-Latenz. Ergebnisse für die Testkonfiguration und die aktive Konfiguration liegen unter `reports/interaction.json`.
+The interaction benchmark also checks the QML flow for selecting a missing key,
+assigning its first output, and undoing/redoing the change completely. It measures
+60 key selections, layer switches, and macro changes with undo, including UI
+updates. It discards drafts without writing configuration files. Measurements
+cover call processing and immediate Qt/QML updates, not complete input-to-display
+latency. Results for the test and active configurations are in
+`reports/interaction.json`.
 
-Das Startprofil zeigt die Zeiten bis zur Qt-Initialisierung, geladenen Konfiguration, vorbereiteten Wiederherstellung, geladenen Oberfläche und zum ersten Bild. Die Zeiten beginnen im Programm; eine erforderliche Kompilierung ist nicht enthalten.
+Startup profiling reports time to Qt initialization, configuration loading,
+recovery readiness, UI loading, and the first frame. Timing begins inside the
+program and excludes any required compilation.
 
-Ein Vorschaubild ohne Diensteinrichtung erzeugt:
+Create a preview image without setting up recovery services:
 
 ```sh
 QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= ./run.sh --screenshot /tmp/kanata-studio-rust.png
