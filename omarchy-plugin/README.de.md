@@ -1,5 +1,9 @@
 # Kanata Studio als Omarchy-Plugin
 
+Der eigene Plugin-Code steht unter MIT (siehe LICENSE im Repository oder im
+vorbereiteten Paket). Pakete enthalten außerdem THIRD_PARTY_NOTICES.md und
+licenses/ mit Rust-Lizenzhinweisen. Omarchy/Quickshell und Qt stellt das System bereit.
+
 [English](README.md)
 
 Vorbereitete erste Integrationsstufe: ein echtes Omarchy-Bar-Widget zeigt den

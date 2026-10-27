@@ -1,5 +1,9 @@
 # Kanata Studio Rust
 
+Original project code: [MIT](LICENSE). The desktop app uses Qt under LGPLv3;
+dependencies retain their own licenses. See [third-party notices](THIRD_PARTY_NOTICES.md)
+and [binary redistribution instructions](LICENSING.md).
+
 [Deutsch](README.de.md)
 
 A graphical editor for existing Kanata configurations, with a Rust core, a
@@ -111,12 +115,14 @@ On Omarchy, the download installer also needs the plugin archive and checksum
 for the same release; otherwise, use `--app-only`. CI packages the plugin with
 `--skip-validation` because Omarchy is not installed there. The target machine
 still validates the plugin with Omarchy before installation. Local builds on
-Omarchy remain supported, but inherit the build machine's glibc requirement.
+Omarchy remain supported; private bundles require `--development` and inherit
+the build machine's glibc requirement.
 
 Qt locates its modules and plugins through `qt.conf`; see the
 [Qt documentation](https://doc.qt.io/qt-6/qt-conf.html). Libraries are loaded
-dynamically, and available distribution license notices are included under
-`licenses/`. Native tools such as Kanata and systemctl retain their original
+dynamically. New release builds include complete distribution copyright files
+under `licenses/` and matching source packages under `sources/debian/`.
+The published v0.2.0/v0.2.1 archives predate this mechanism; see [LICENSING.md](LICENSING.md). Native tools such as Kanata and systemctl retain their original
 library environment.
 
 Run `~/.local/bin/kanata-studio-rust --display-check` to inspect the windowing
@@ -153,7 +159,7 @@ cd kanata-studio-rust
 cargo fetch --locked
 ./build.sh
 ./run.sh
-./package.sh --install
+./package.sh --development --install # Private local installation
 ```
 
 To install the Omarchy plugin as well:
@@ -181,13 +187,15 @@ after changes to source, build files, or QML. `./build.sh` always runs the build
 checks. Builds use dependencies from `Cargo.lock` offline.
 
 ```sh
-./package.sh           # Create a runtime bundle and checksum
-./package.sh --install # Also install it for the current user
+./package.sh                         # Debian with matching deb-src: release bundle + sources
+./package.sh --development --install # Private local bundle (not for redistribution)
 ```
 
 The packaging tool requires Linux, Python 3.11+, `ldd`, `readelf`, and an existing
-Qt installation. Available distribution license notices are collected from the
-package database on Arch/Omarchy and Debian.
+Qt installation. Release bundles require Debian with matching `deb-src`
+repositories and network access for the exact library source packages. Sources
+are included in the archive and increase its download and installed size.
+See [LICENSING.md](LICENSING.md) for the source and replacement instructions.
 
 The UI lives in `ui/main.qml` and `ui/ActionPanel.qml`. During the build, small
 adaptations bind key labels to the prepared Rust model without modifying these

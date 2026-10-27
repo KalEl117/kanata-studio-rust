@@ -1,5 +1,9 @@
 # Kanata Studio Omarchy plugin
 
+Original plugin code: MIT (see LICENSE in the repository or prepared package).
+Prepared packages also include THIRD_PARTY_NOTICES.md and licenses/ with Rust
+notices. Omarchy/Quickshell and Qt are supplied separately by the host system.
+
 [Deutsch](README.de.md) · [Main installation guide](../README.md)
 
 The Omarchy bar widget shows the status of `kanata.service`. Left-click to open

@@ -1,5 +1,9 @@
 # Kanata Studio Rust
 
+Eigener Projektcode: [MIT](LICENSE). Die Desktop-App verwendet Qt unter LGPLv3;
+Fremdkomponenten behalten ihre jeweiligen Lizenzen. Siehe
+[Lizenzhinweise](THIRD_PARTY_NOTICES.md) und [Weitergabe von Binärpaketen](LICENSING.md).
+
 [English](README.md)
 
 Grafischer Editor für vorhandene Kanata-Konfigurationen mit Rust-Kern,
@@ -109,13 +113,15 @@ benötigt der automatische Installer außerdem das Plugin-Archiv derselben
 Version samt Prüfsumme; andernfalls `--app-only` verwenden. Die CI baut das
 Plugin mit `--skip-validation`, weil dort Omarchy fehlt; auf dem Zielgerät
 wird es vor der Installation weiterhin durch Omarchy validiert. Die bisherigen
-lokalen Omarchy-Builds sind weiterhin möglich, behalten aber die glibc-Grenze
-des Build-Rechners.
+lokalen Omarchy-Builds sind weiterhin möglich; private Pakete benötigen
+`--development` und behalten die glibc-Grenze des Build-Rechners.
 
 Qt sucht Module und Plugins über `qt.conf`; siehe
 [Qt-Dokumentation](https://doc.qt.io/qt-6/qt-conf.html). Die Bibliotheken werden
-dynamisch geladen; verfügbare Distributions-Lizenztexte werden unter
-`licenses/` mitgeliefert. Native Hilfsprogramme wie Kanata und systemctl
+dynamisch geladen. Neue Release-Builds enthalten die Distributions-Lizenztexte
+unter `licenses/` und die passenden Quellpakete unter `sources/debian/`.
+Die veröffentlichten Archive v0.2.0/v0.2.1 sind älter als dieser Mechanismus;
+siehe [LICENSING.md](LICENSING.md). Native Hilfsprogramme wie Kanata und systemctl
 verwenden weiterhin ihre ursprüngliche Bibliotheksumgebung.
 
 `~/.local/bin/kanata-studio-rust --display-check` zeigt Fensterprotokoll und
@@ -152,7 +158,7 @@ cd kanata-studio-rust
 cargo fetch --locked
 ./build.sh
 ./run.sh
-./package.sh --install
+./package.sh --development --install # Private lokale Installation
 ```
 
 Für das Omarchy-Plugin zusätzlich:
@@ -175,11 +181,11 @@ cd kanata-studio-rust
 Optional eine `.kbd`-Datei angeben. Ohne Argument wird `~/.config/kanata/kanata.kbd` oder `config.kbd` geöffnet. Es wird keine neue Konfiguration erzeugt. `run.sh` startet die vorhandene ausführbare Datei direkt; es baut nur beim ersten Start oder nach Änderungen an Quellcode, Build-Dateien oder QML. `./build.sh` erzwingt die Build-Prüfung. Die Abhängigkeiten werden dabei aus `Cargo.lock` offline verwendet.
 
 ```sh
-./package.sh           # Laufzeitpaket und Prüfsumme erzeugen
-./package.sh --install # zusätzlich für den aktuellen Benutzer installieren
+./package.sh                         # Debian mit deb-src: Release-Paket samt Quellen
+./package.sh --development --install # Privates lokales Paket, nicht weitergeben
 ```
 
-Das Paketwerkzeug benötigt Linux, Python 3.11 oder neuer, `ldd`, `readelf` und die vorhandene Qt-Installation. Auf diesem Arch/Omarchy-System werden verfügbare Distributions-Lizenztexte zusätzlich über die Paketdatenbank übernommen.
+Das Paketwerkzeug benötigt Linux, Python 3.11 oder neuer, `ldd`, `readelf` und die vorhandene Qt-Installation. Release-Pakete benötigen Debian mit passenden `deb-src`-Paketquellen und Netzwerkzugriff für die exakten Bibliotheksquellen. Diese liegen im Archiv und erhöhen Downloadgröße sowie Speicherbedarf. Details zum Neubau und Bibliotheksaustausch stehen in [LICENSING.md](LICENSING.md).
 
 Die Oberfläche liegt eigenständig unter `ui/main.qml` und `ui/ActionPanel.qml` und wird beim Bauen übernommen. Kleine Anpassungen binden die Tastenbeschriftungen an das vorbereitete Rust-Modell; die ursprünglichen QML-Dateien werden dabei nicht verändert.
 

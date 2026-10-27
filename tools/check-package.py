@@ -26,6 +26,22 @@ with tempfile.TemporaryDirectory(prefix="kanata-rust-package-check-") as folder:
     bundle = next(relocated.iterdir())
     assert (bundle / "plugins/wayland-shell-integration/libxdg-shell.so").is_file(), "Wayland xdg-shell plugin missing"
     metadata = json.loads((bundle / "manifest.json").read_text())
+    assert metadata.get('license') == 'MIT'
+    assert metadata.get('redistributable') is True, 'Development bundles cannot pass release checks'
+    for name in ('LICENSE', 'THIRD_PARTY_NOTICES.md', 'LICENSING.md',
+                 'licenses/RUST-DEPENDENCIES.txt', 'licenses/LGPL-3.0.txt',
+                 'licenses/GPL-3.0.txt', 'licenses/rust-toolchain/COPYRIGHT.html'):
+        assert (bundle / name).is_file(), f'Missing license material: {name}'
+    inventory = json.loads((bundle / 'licenses/NATIVE-PACKAGES.json').read_text())
+    native_files = {str(path.relative_to(bundle)) for directory in ('lib', 'qml', 'plugins')
+                    for path in (bundle / directory).rglob('*') if path.is_file()}
+    assert native_files == set(inventory['files']), 'Native file inventory is incomplete'
+    assert inventory['sourceFiles'], 'Missing corresponding native sources'
+    for filename, digest in inventory['sourceFiles'].items():
+        assert hashlib.sha256((bundle / filename).read_bytes()).hexdigest() == digest, filename
+    for package in inventory['packages'].values():
+        assert (bundle / package['notice']).is_file(), package
+        assert list((bundle / 'sources/debian' / package['source']).glob('*.dsc')), package
     print(f"Paket: Qt {metadata['qt']}, glibc >= {metadata['minimumGlibc']}, {len(metadata['bundledLibraries'])} Bibliotheken", flush=True)
     subprocess.run([str(bundle / "launch.sh"), "--self-test"], env=env, check=True, timeout=30)
     screenshot = relocated / "ui.png"
