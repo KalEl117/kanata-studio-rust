@@ -69,8 +69,8 @@ tests run in the Debian build job with the upstream validator.
 The app/plugin archives, checksums, and release installers for v0.2.0 and v0.2.1
 were removed from GitHub Releases on 2026-10-28 because they predated this
 collection and lacked complete redistribution materials. Their version tags
-and source history are retained. No replacement binary release is currently
-published; build the current `main` branch using README.md.
+and source history are retained. v0.2.2 is the
+first replacement release built with the verified process above.
 
 Adding license files to this repository does not retroactively repair copies
 of the old archives. Do not re-upload them. A replacement binary release must

@@ -16,15 +16,36 @@ Der vollständige Editor bietet zusätzlich Makros und einen 30-Sekunden-Test.
 Die eigenständige App benötigt weder Omarchy noch Hyprland und kann unter
 Wayland oder X11 laufen.
 
-**Aktuell sind keine Binärdownloads verfügbar.** Die App- und Plugin-Archive,
-Prüfsummen und Release-Installer von v0.2.0 und v0.2.1 wurden am 28.10.2026
-wegen unvollständiger Lizenz- und Quellmaterialien entfernt.
-Versions-Tags und Quellcode-Historie bleiben erhalten.
+Die Download-Pakete enthalten Qt und QML. Die Installation erfolgt pro Benutzer
+und benötigt kein `sudo`.
 
-Bitte vorerst [den aktuellen Stand von `main` selbst bauen](#aus-dem-quellcode-bauen).
-Der Download-Installer benötigt ein neu veröffentlichtes Binärrelease und kann
-die entfernten Versionen nicht installieren. Der korrigierte Paketbau ist in
-[LICENSING.md](LICENSING.md) beschrieben.
+### Schnellinstallation
+
+Voraussetzungen: x86_64-Linux mit glibc 2.36+ und Python 3.10+. GitHub-Konto,
+GitHub CLI, Rust oder ein Compiler sind nicht nötig.
+
+```sh
+curl -fL https://raw.githubusercontent.com/KalEl117/kanata-studio-rust/main/install.py -o install.py
+python3 install.py
+```
+
+Der Installer lädt das neueste stabile GitHub-Release, prüft alle
+SHA-256-Prüfsummen, entpackt die Pakete und legt einen Starter an. Erneut
+ausgeführt aktualisiert er eine bestehende Installation. Auf anderen
+Linux-Desktops installiert er nur die App; unter Omarchy installiert und
+aktiviert er zusätzlich das passende Plugin und startet die Shell neu.
+
+```sh
+python3 install.py --check-only        # Nur herunterladen und prüfen
+python3 install.py --app-only          # Ohne Plugin, auch unter Omarchy
+python3 install.py --release v0.2.2    # Bestimmtes Release wählen
+python3 install.py --prefix ~/.local   # Installationspräfix der App wählen
+python3 install.py --no-restart        # Shell später selbst neu starten
+```
+
+v0.2.2 ist das erste Release mit vollständigen Lizenz- und Quellmaterialien.
+Die Archive von v0.2.0 und v0.2.1 wurden am 28.10.2026 zurückgezogen; Kopien
+davon bitte weder verwenden noch weitergeben. Siehe [LICENSING.md](LICENSING.md).
 
 ### Was zusätzlich für Kanata nötig ist
 

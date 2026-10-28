@@ -16,15 +16,36 @@ saving. The full editor also includes macros and a 30-second test mode.
 The standalone app runs on Wayland or X11 and does not require Omarchy or
 Hyprland.
 
-**Binary downloads are currently unavailable.** The v0.2.0 and v0.2.1 app and
-plugin archives, checksums, and release installers were withdrawn on 2026-10-28
-because their license and corresponding-source materials were incomplete.
-The version tags and source history remain available.
+Download packages include Qt and QML. Installation is per user and does not
+require `sudo`.
 
-For now, [build the current `main` branch from source](#build-from-source).
-The download installer requires a newly published binary release; it cannot
-install the withdrawn versions. See [LICENSING.md](LICENSING.md) for the corrected
-packaging process.
+### Quick installation
+
+Requirements: x86_64 Linux with glibc 2.36+ and Python 3.10+. You do not need a
+GitHub account, GitHub CLI, Rust, or a compiler.
+
+```sh
+curl -fL https://raw.githubusercontent.com/KalEl117/kanata-studio-rust/main/install.py -o install.py
+python3 install.py
+```
+
+The installer downloads the latest stable GitHub release, verifies all SHA-256
+checksums, extracts the packages, and adds an application launcher. Run it again
+to update an existing installation. On other Linux desktops, it installs the app
+only. On Omarchy, it also installs and enables the matching plugin and restarts
+the shell.
+
+```sh
+python3 install.py --check-only        # Download and verify without installing
+python3 install.py --app-only          # Skip the plugin, including on Omarchy
+python3 install.py --release v0.2.2    # Select a specific release
+python3 install.py --prefix ~/.local   # Choose the app installation prefix
+python3 install.py --no-restart        # Restart the shell yourself later
+```
+
+v0.2.2 is the first release with complete license and corresponding-source
+materials. The v0.2.0 and v0.2.1 archives were withdrawn on 2026-10-28; do not use
+or redistribute copies of them. See [LICENSING.md](LICENSING.md).
 
 ### Set up Kanata separately
 
