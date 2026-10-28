@@ -7,7 +7,7 @@ needs_build=false
 if [ ! -x "$app_binary" ] || [ ! -f "$build_stamp" ]; then
   needs_build=true
 else
-  for input in Cargo.toml Cargo.lock build.sh run.sh tools/prepare-ui.py qt/*.cpp qt/*.h qt/*.pro qt/resources.qrc ui/main.qml ui/ActionPanel.qml ui/KeyboardModel.js; do
+  for input in Cargo.toml Cargo.lock build.sh run.sh tools/prepare-ui.py qt/*.cpp qt/*.h qt/*.pro qt/resources.qrc ui/*.qml ui/*.js; do
     if [ "$input" -nt "$build_stamp" ]; then needs_build=true; break; fi
   done
   if [ "$needs_build" = false ] && [ -n "$(find src -type f -newer "$build_stamp" -print -quit)" ]; then

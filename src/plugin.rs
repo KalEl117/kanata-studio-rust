@@ -214,12 +214,53 @@ fn service_config(command: &str) -> Option<String> {
     if !token.is_empty() {
         tokens.push(token);
     }
-    for pair in tokens.windows(2) {
-        if matches!(pair[0].as_str(), "-c" | "--config") {
-            return Some(pair[1].clone());
+    // Kanata starts with the first -c/--cfg; later ones are only switch targets.
+    let flag = |token: &str| matches!(token, "-c" | "--cfg" | "--config");
+    for (index, token) in tokens.iter().enumerate() {
+        if flag(token) {
+            return tokens.get(index + 1).cloned();
+        }
+        if let Some((name, value)) = token.split_once('=')
+            && flag(name)
+        {
+            return Some(value.to_owned());
         }
     }
-    tokens
-        .iter()
-        .find_map(|token| token.strip_prefix("--config=").map(str::to_owned))
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::service_config;
+
+    #[test]
+    fn service_config_accepts_kanata_flag_spellings() {
+        let parse = |argv: &str| {
+            service_config(&format!(
+                "{{ path=/usr/bin/kanata ; argv[]={argv} ; ignore_errors=no }}"
+            ))
+        };
+        assert_eq!(
+            parse("/usr/bin/kanata -c /a.kbd").as_deref(),
+            Some("/a.kbd")
+        );
+        assert_eq!(
+            parse("/usr/bin/kanata --cfg /b.kbd").as_deref(),
+            Some("/b.kbd")
+        );
+        assert_eq!(
+            parse("/usr/bin/kanata --cfg=/c.kbd").as_deref(),
+            Some("/c.kbd")
+        );
+        assert_eq!(
+            parse("/usr/bin/kanata --config=/d.kbd -c /e.kbd").as_deref(),
+            Some("/d.kbd")
+        );
+        assert_eq!(
+            parse("/usr/bin/kanata -c \"/f g.kbd\"").as_deref(),
+            Some("/f g.kbd")
+        );
+        assert_eq!(parse("/usr/bin/kanata --cfgx /h.kbd"), None);
+        assert_eq!(parse("/usr/bin/kanata"), None);
+    }
 }

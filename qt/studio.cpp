@@ -40,6 +40,10 @@ Studio::Studio(QObject *parent) : QObject(parent), m_rustEditor(ks_editor_new())
     m_environmentTimer.setInterval(2500);
     connect(&m_environmentTimer, &QTimer::timeout, this, [this] { detectKeyboardLayout(); });
     m_environmentTimer.start();
+    connect(&m_jobWatcher, &QFutureWatcher<JobResult>::finished, this, [this] {
+        finishJob(m_job, m_jobWatcher.result());
+        emit busyChanged();
+    });
 }
 
 void Studio::applyEnvironment(const QJsonObject &result) {
@@ -57,7 +61,7 @@ void Studio::applyEnvironment(const QJsonObject &result) {
 
 void Studio::setLayoutChoice(const QString &choice) {
     const QJsonObject result = rustRequest({{"op", "layoutChoice"}, {"choice", choice}});
-    if (!result.value("ok").toBool()) { setStatus(result.value("error").toString()); return; }
+    if (!result.value("ok").toBool()) { setStatus(result.value("error").toString(), true); return; }
     m_layoutInfo.insert("choice", choice); m_keyNames.clear();
     if (!m_source.isEmpty()) refresh();
     emit layoutChanged(); emit changed();
@@ -80,10 +84,13 @@ QString Studio::effectiveLayout() const {
     const QString choice = m_layoutInfo.value("choice").toString();
     return QStringList{"de", "us", "gb"}.contains(choice) ? choice : m_layoutInfo.value("id", "de").toString();
 }
-void Studio::setStatus(const QString &message) { if (m_status == message) return; m_status = message; emit statusChanged(); emit changed(); }
-void Studio::report(const QString &message) { setStatus(message); }
+void Studio::setStatus(const QString &message, bool error) {
+    if (m_status == message && m_statusError == error) return;
+    m_status = message; m_statusError = error; emit statusChanged(); emit changed();
+}
+void Studio::report(const QString &message) { setStatus(message, true); }
 
-Studio::~Studio() { m_environmentWatcher.waitForFinished(); ks_editor_free(m_rustEditor); }
+Studio::~Studio() { m_environmentWatcher.waitForFinished(); m_jobWatcher.waitForFinished(); ks_editor_free(m_rustEditor); }
 
 QJsonObject Studio::rustRequest(QJsonObject request) const {
     const QByteArray input = QJsonDocument(request).toJson(QJsonDocument::Compact);
@@ -103,11 +110,11 @@ bool Studio::rustEdit(const QString &operation, QJsonObject arguments) {
     arguments.insert("op", operation);
     arguments.insert("source", m_source);
     if (QStringList{"setAction", "setTapHold", "setMacro"}.contains(operation) && m_selectedPhysicalKey.isEmpty()) {
-        setStatus("Bitte eine Taste auswählen"); return false;
+        setStatus("Bitte eine Taste auswählen", true); return false;
     }
     const QString previous = m_source;
     const QJsonObject result = rustRequest(arguments);
-    if (!result.value("ok").toBool()) { setStatus(result.value("error").toString()); return false; }
+    if (!result.value("ok").toBool()) { setStatus(result.value("error").toString(), true); return false; }
     m_source = result.value("source").toString();
     m_canUndo = result.value("canUndo").toBool();
     m_canRedo = result.value("canRedo").toBool(); emit historyChanged();
@@ -181,15 +188,22 @@ QString Studio::actionLabelFor(int key) const {
     return key >= 0 && key < m_actionLabels.size() ? m_actionLabels[key].toString() : QString{};
 }
 bool Studio::open(const QString &filename) {
-    if (m_previewActive) { setStatus("Bitte zuerst den laufenden Test beenden"); return false; }
+    if (busy()) { setStatus("Bitte warten, bis der laufende Vorgang abgeschlossen ist", true); return false; }
+    if (m_previewActive) { setStatus("Bitte zuerst den laufenden Test beenden", true); return false; }
     QFile file(filename);
-    if (!file.open(QIODevice::ReadOnly)) { setStatus("Datei kann nicht geöffnet werden: " + file.errorString()); return false; }
+    if (!file.open(QIODevice::ReadOnly)) { setStatus("Datei kann nicht geöffnet werden: " + file.errorString(), true); return false; }
     const QByteArray data = file.readAll();
+    // QString::fromUtf8 drops a BOM and replaces invalid bytes; refuse anything a save could not reproduce.
+    const QByteArray bomBytes("\xEF\xBB\xBF");
+    const bool bom = data.startsWith(bomBytes);
     const QString source = QString::fromUtf8(data);
+    if ((bom ? bomBytes : QByteArray()) + source.toUtf8() != data) {
+        setStatus("Datei ist kein gültiges UTF-8 und wird zum Schutz nicht geöffnet", true); return false;
+    }
     const QJsonObject result = rustRequest({{"op", "loadView"}, {"source", source}, {"layout", effectiveLayout()}});
-    if (!result.value("ok").toBool()) { setStatus("Konfiguration nicht lesbar: " + result.value("error").toString()); return false; }
+    if (!result.value("ok").toBool()) { setStatus("Konfiguration nicht lesbar: " + result.value("error").toString(), true); return false; }
     m_source = source; applyView(result.value("view").toObject());
-    m_path = QFileInfo(filename).absoluteFilePath(); m_original = m_source; m_diskHash = digest(data);
+    m_path = QFileInfo(filename).absoluteFilePath(); m_original = m_source; m_diskHash = digest(data); m_bom = bom;
     clearRustHistory(); emit documentChanged();
     setStatus("Konfiguration geladen");
     return true;
@@ -207,7 +221,7 @@ void Studio::selectKey(int index) {
 }
 bool Studio::selectPhysicalKey(const QString &name) {
     const QJsonObject result = rustRequest({{"op", "selectPhysicalKey"}, {"name", name}});
-    if (!result.value("ok").toBool()) { setStatus(result.value("error").toString()); return false; }
+    if (!result.value("ok").toBool()) { setStatus(result.value("error").toString(), true); return false; }
     applyView(result.value("view").toObject());
     return true;
 }
@@ -259,7 +273,14 @@ QString Studio::kanataBinary() const {
     return QFileInfo(local).isExecutable() ? local : QStandardPaths::findExecutable("kanata");
 }
 
-bool Studio::serviceUsesOpenFile(QString &error) const {
+QString Studio::serviceConfigPath(const QString &execStart) {
+    static const QRegularExpression rx("(?:^|\\s)(?:-c|--cfg|--config)(?:=|\\s+)(?:\"([^\"]+)\"|(\\S+))");
+    const auto match = rx.match(execStart);
+    if (!match.hasMatch()) return {};
+    return match.captured(1).isEmpty() ? match.captured(2) : match.captured(1);
+}
+
+bool Studio::serviceUsesOpenFile(const QString &path, QString &error) {
     QProcess process;
     QProcessEnvironment native = QProcessEnvironment::systemEnvironment();
     if (native.contains("KANATA_STUDIO_SYSTEM_LD_LIBRARY_PATH")) native.insert("LD_LIBRARY_PATH", native.value("KANATA_STUDIO_SYSTEM_LD_LIBRARY_PATH"));
@@ -269,47 +290,112 @@ bool Studio::serviceUsesOpenFile(QString &error) const {
         || process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
         error = "kanata.service konnte nicht gelesen werden"; return false;
     }
-    const QString command = QString::fromUtf8(process.readAllStandardOutput());
-    const QRegularExpression rx("(?:^|\\s)(?:-c|--config)\\s+(?:\\\"([^\\\"]+)\\\"|(\\S+))");
-    const auto match = rx.match(command);
-    if (!match.hasMatch()) { error = "Konfigurationspfad von kanata.service ist unbekannt"; return false; }
-    QString servicePath = match.captured(1).isEmpty() ? match.captured(2) : match.captured(1);
+    QString servicePath = serviceConfigPath(QString::fromUtf8(process.readAllStandardOutput()));
+    if (servicePath.isEmpty()) { error = "Konfigurationspfad von kanata.service ist unbekannt"; return false; }
     servicePath.replace("%h", QDir::homePath());
-    if (QFileInfo(servicePath).canonicalFilePath() != QFileInfo(m_path).canonicalFilePath()) {
+    if (QFileInfo(servicePath).canonicalFilePath() != QFileInfo(path).canonicalFilePath()) {
         error = "Diese Datei wird von kanata.service nicht verwendet"; return false;
     }
     return true;
 }
 
-bool Studio::check() {
-    if (m_path.isEmpty()) { setStatus("Keine Konfiguration geöffnet"); return false; }
-    const QString binary = kanataBinary();
-    if (binary.isEmpty()) { setStatus("Kanata wurde nicht gefunden"); return false; }
-    const QJsonObject result = rustRequest({{"op", "check"}, {"binary", binary}, {"path", m_path}, {"source", m_source}});
-    if (!result.value("ok").toBool()) { setStatus("Prüfung fehlgeschlagen: " + result.value("error").toString().left(400)); return false; }
-    setStatus("Kanata Prüfung erfolgreich"); return true;
-}
-
-bool Studio::save() {
-    if (m_previewActive) { setStatus("Bitte zuerst den laufenden Test beenden"); return false; }
-    if (!dirty()) { setStatus("Keine Änderungen zum Speichern"); return true; }
-    if (!check()) return false;
-    QString serviceError;
-    if (!serviceUsesOpenFile(serviceError)) { setStatus(serviceError); return false; }
-    QFile file(m_path);
-    if (!file.open(QIODevice::ReadOnly)) { setStatus("Konfiguration kann nicht erneut gelesen werden"); return false; }
-    const QByteArray current = file.readAll(); file.close();
-    if (digest(current) != m_diskHash) { setStatus("Datei wurde extern geändert · bitte neu öffnen"); return false; }
-    const QJsonObject result = rustRequest({{"op", "save"}, {"path", m_path}, {"source", m_source},
-                                           {"original", QString::fromLatin1(current.toBase64())}});
-    if (!result.value("ok").toBool()) { setStatus(result.value("error").toString()); return false; }
-    m_original = m_source; m_diskHash = digest(m_source.toUtf8());
-    clearRustHistory(); refresh(); emit documentChanged(); emit changed();
-    setStatus("Gespeichert und Kanata neu geladen");
+bool Studio::prepareJob(JobKind kind, Job &job) {
+    if (busy()) { setStatus("Ein Vorgang läuft bereits", true); return false; }
+    if (m_path.isEmpty()) { setStatus("Keine Konfiguration geöffnet", true); return false; }
+    if (kind == JobKind::Save) {
+        if (m_previewActive) { setStatus("Bitte zuerst den laufenden Test beenden", true); return false; }
+        if (!dirty()) { setStatus("Keine Änderungen zum Speichern"); return false; }
+    }
+    if (kind == JobKind::Preview) {
+        if (!m_previewReady) { setStatus("Wiederherstellungsdienst ist nicht bereit", true); return false; }
+        if (m_previewActive) { setStatus("Ein Test läuft bereits", true); return false; }
+    }
+    job = {kind, kanataBinary(), m_path, diskText(m_source), runtimeLauncher(), m_diskHash};
     return true;
 }
 
-void Studio::discard() { m_source = m_original; clearRustHistory(); refresh(); setStatus("Entwurf verworfen"); }
+// Runs on a worker thread: touches no Studio state and uses its own Rust handle.
+Studio::JobResult Studio::runJob(const Job &job) {
+    if (job.binary.isEmpty()) return {false, "Kanata wurde nicht gefunden"};
+    const auto rust = [](const QJsonObject &request) {
+        void *editor = ks_editor_new();
+        char *response = ks_editor_request(editor, QJsonDocument(request).toJson(QJsonDocument::Compact).constData());
+        const QJsonObject result = response ? QJsonDocument::fromJson(QByteArray(response)).object()
+                                            : QJsonObject{{"ok", false}, {"error", "Rust-Kern nicht verfügbar"}};
+        ks_string_free(response); ks_editor_free(editor);
+        return result;
+    };
+    const QJsonObject checked = rust({{"op", "check"}, {"binary", job.binary}, {"path", job.path}, {"source", job.source}});
+    if (!checked.value("ok").toBool()) return {false, "Prüfung fehlgeschlagen: " + checked.value("error").toString().left(400)};
+    if (job.kind == JobKind::Check) return {true, "Kanata Prüfung erfolgreich"};
+    QString error;
+    if (!serviceUsesOpenFile(job.path, error)) return {false, error};
+    QFile file(job.path);
+    if (!file.open(QIODevice::ReadOnly)) return {false, "Konfiguration kann nicht erneut gelesen werden"};
+    const QByteArray current = file.readAll(); file.close();
+    if (digest(current) != job.diskHash) return {false, "Datei wurde extern geändert · bitte neu öffnen"};
+    if (job.kind == JobKind::Preview) {
+        if (!Preview::start(job.launcher, job.path, current, job.source.toUtf8(), error))
+            return {false, "Test konnte nicht gestartet werden: " + error};
+        return {true, "Entwurf wird 30 Sekunden getestet · gespeicherte Belegung kehrt automatisch zurück"};
+    }
+    const QJsonObject saved = rust({{"op", "save"}, {"path", job.path}, {"source", job.source},
+                                    {"original", QString::fromLatin1(current.toBase64())}});
+    if (!saved.value("ok").toBool()) return {false, saved.value("error").toString()};
+    return {true, "Gespeichert und Kanata neu geladen"};
+}
+
+bool Studio::finishJob(const Job &job, const JobResult &result) {
+    setStatus(result.status, !result.ok);
+    if (!result.ok) return false;
+    if (job.kind == JobKind::Save) {
+        // The user may have kept editing while the save ran; only the saved text becomes the baseline.
+        const QString saved = m_bom ? job.source.mid(1) : job.source;
+        m_original = saved; m_diskHash = digest(job.source.toUtf8());
+        if (m_source == saved) clearRustHistory();
+        refresh(); emit documentChanged(); emit changed();
+    } else if (job.kind == JobKind::Preview) {
+        m_previewActive = true;
+        m_previewRecoveryStarted = false;
+        m_previewRemaining = 30;
+        m_previewTimer.start(); emit previewChanged();
+    }
+    return true;
+}
+
+bool Studio::check() {
+    Job job;
+    return prepareJob(JobKind::Check, job) && finishJob(job, runJob(job));
+}
+
+bool Studio::save() {
+    if (!dirty() && !m_path.isEmpty() && !m_previewActive) { setStatus("Keine Änderungen zum Speichern"); return true; }
+    Job job;
+    return prepareJob(JobKind::Save, job) && finishJob(job, runJob(job));
+}
+
+bool Studio::startPreview() {
+    Job job;
+    return prepareJob(JobKind::Preview, job) && finishJob(job, runJob(job));
+}
+
+void Studio::requestJob(JobKind kind) {
+    if (!prepareJob(kind, m_job)) return;
+    setStatus(kind == JobKind::Check ? "Kanata prüft den Entwurf …" : kind == JobKind::Save ? "Speichern …" : "Test wird gestartet …");
+    m_jobWatcher.setFuture(QtConcurrent::run(&Studio::runJob, m_job));
+    emit busyChanged();
+}
+
+void Studio::requestCheck() { requestJob(JobKind::Check); }
+void Studio::requestSave() {
+    if (!dirty() && !m_path.isEmpty() && !m_previewActive) { setStatus("Keine Änderungen zum Speichern"); return; }
+    requestJob(JobKind::Save);
+}
+void Studio::requestPreview() { requestJob(JobKind::Preview); }
+
+void Studio::discard() {
+    if (busy()) { setStatus("Bitte warten, bis der laufende Vorgang abgeschlossen ist", true); return; }
+    m_source = m_original; clearRustHistory(); refresh(); setStatus("Entwurf verworfen"); }
 
 void Studio::initializePreview() {
     QString error;
@@ -322,36 +408,14 @@ void Studio::initializePreview() {
         m_previewTimer.start();
         updatePreview();
     }
-    if (!m_previewReady) setStatus("30 Sekunden Test nicht verfügbar: " + error);
+    if (!m_previewReady) setStatus("30 Sekunden Test nicht verfügbar: " + error, true);
     emit previewChanged(); emit changed();
-}
-
-bool Studio::startPreview() {
-    if (!m_previewReady) { setStatus("Wiederherstellungsdienst ist nicht bereit"); return false; }
-    if (m_previewActive) { setStatus("Ein Test läuft bereits"); return false; }
-    if (!check()) return false;
-    QString serviceError;
-    if (!serviceUsesOpenFile(serviceError)) { setStatus(serviceError); return false; }
-    QFile file(m_path);
-    if (!file.open(QIODevice::ReadOnly)) { setStatus("Konfiguration kann nicht gelesen werden"); return false; }
-    const QByteArray current = file.readAll();
-    if (digest(current) != m_diskHash) { setStatus("Datei wurde extern geändert · bitte neu öffnen"); return false; }
-    QString error;
-    if (!Preview::start(runtimeLauncher(), m_path, current, m_source.toUtf8(), error)) {
-        setStatus("Test konnte nicht gestartet werden: " + error); return false;
-    }
-    m_previewActive = true;
-    m_previewRecoveryStarted = false;
-    m_previewRemaining = 30;
-    m_previewTimer.start(); emit previewChanged();
-    setStatus("Entwurf wird 30 Sekunden getestet · gespeicherte Belegung kehrt automatisch zurück");
-    return true;
 }
 
 bool Studio::cancelPreview() {
     if (!m_previewActive) return false;
     QString error;
-    if (!Preview::cancel(error)) { setStatus(error); return false; }
+    if (!Preview::cancel(error)) { setStatus(error, true); return false; }
     setStatus("Test wird beendet · gespeicherte Belegung wird wiederhergestellt");
     return true;
 }
@@ -366,14 +430,14 @@ void Studio::updatePreview() {
         const qint64 pid = current.value("pid").toLongLong();
         if (phase == "testing" && pid > 0 && ::kill(static_cast<pid_t>(pid), 0) != 0 && !m_previewRecoveryStarted) {
             m_previewRecoveryStarted = QProcess::startDetached(runtimeLauncher(), {"--recover-preview"});
-            if (m_previewRecoveryStarted) setStatus("Testprozess wurde unterbrochen · Wiederherstellung läuft");
+            if (m_previewRecoveryStarted) setStatus("Testprozess wurde unterbrochen · Wiederherstellung läuft", true);
         }
         emit previewChanged(); emit changed(); return;
     }
     if (!m_previewActive) return;
     m_previewActive = false; m_previewRecoveryStarted = false; m_previewRemaining = 0; m_previewTimer.stop(); emit previewChanged();
     if (phase == "reverted") setStatus("Test beendet · gespeicherte Belegung wieder aktiv");
-    else setStatus("Testfehler: " + current.value("message").toString());
+    else setStatus("Testfehler: " + current.value("message").toString(), true);
 }
 
 QString Studio::runtimeLauncher() const {

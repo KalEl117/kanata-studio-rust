@@ -7,86 +7,193 @@ pub mod protocol;
 pub mod runtime;
 pub mod session;
 
-use editor::{Editor, Request};
+use base64::{Engine, engine::general_purpose::STANDARD};
+use editor::{Edit, Editor, Request};
+use serde::Deserialize;
 use serde_json::json;
 use std::ffi::{CStr, CString, c_char};
+use std::path::PathBuf;
+
+/// Optional document context sent with view and selection requests.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ViewContext {
+    source: Option<String>,
+    comparison_source: Option<String>,
+    layout: Option<String>,
+}
+
+/// Every request the core understands. On the wire `op` names the variant; fields are camelCase.
+#[derive(Deserialize)]
+#[serde(tag = "op", rename_all = "camelCase", rename_all_fields = "camelCase")]
+enum Command {
+    Environment {
+        config: Option<String>,
+    },
+    LayoutChoice {
+        choice: String,
+    },
+    KeyLabel {
+        #[serde(default)]
+        key: String,
+        layout: Option<String>,
+    },
+    View(ViewContext),
+    LoadView(ViewContext),
+    ViewLayout(ViewContext),
+    Select {
+        #[serde(flatten)]
+        context: ViewContext,
+        layer: Option<usize>,
+        key: Option<usize>,
+    },
+    SelectPhysicalKey {
+        #[serde(flatten)]
+        context: ViewContext,
+        name: String,
+    },
+    Check {
+        binary: String,
+        path: PathBuf,
+        source: String,
+    },
+    Save {
+        path: PathBuf,
+        original: String,
+        source: String,
+    },
+    Worker {
+        directory: PathBuf,
+        #[serde(default)]
+        recover: bool,
+    },
+    ActionDetails {
+        #[serde(default)]
+        source: String,
+        layer: Option<usize>,
+        key: Option<usize>,
+    },
+    Parse {
+        source: String,
+    },
+    /// Any other `op` is an edit and is parsed as [`Request`].
+    #[serde(other)]
+    Edit,
+}
+
+fn invalid(input: &str, error: serde_json::Error) -> String {
+    match serde_json::from_str::<serde_json::Value>(input)
+        .ok()
+        .and_then(|value| value["op"].as_str().map(str::to_owned))
+    {
+        Some(op) => format!("Ungültige Anfrage „{op}“: {error}"),
+        None => format!("Ungültige Anfrage: {error}"),
+    }
+}
 
 pub fn dispatch(editor: &mut Editor, input: &str) -> Result<serde_json::Value, String> {
-    let value: serde_json::Value = serde_json::from_str(input).map_err(|e| e.to_string())?;
-    match value["op"].as_str() {
-        Some("environment") => {
-            return Ok(environment::discover_for_config(value["config"].as_str()));
+    let session = &mut editor.session;
+    let view =
+        |session: &mut session::Session, context: ViewContext, reset: bool| -> Result<(), String> {
+            if let Some(source) = &context.source {
+                session.sync(source, reset)?;
+            }
+            if let Some(original) = &context.comparison_source {
+                session.set_baseline(original)?;
+            }
+            if let Some(layout) = context.layout {
+                session.layout = layout;
+            }
+            Ok(())
+        };
+    let command = serde_json::from_str(input).map_err(|e| invalid(input, e))?;
+    let mut req = match command {
+        Command::Environment { config } => {
+            return Ok(environment::discover_for_config(config.as_deref()));
         }
-        Some("layoutChoice") => {
-            environment::save_choice(value["choice"].as_str().ok_or("Layout-Auswahl fehlt")?)?;
+        Command::LayoutChoice { choice } => {
+            environment::save_choice(&choice)?;
             return Ok(json!({"ok":true}));
         }
-        Some("keyLabel") => {
-            return Ok(
-                json!({"ok":true,"label":environment::key_label(value["key"].as_str().unwrap_or(""),value["layout"].as_str().unwrap_or("de"))}),
-            );
+        Command::KeyLabel { key, layout } => {
+            let label = environment::key_label(&key, layout.as_deref().unwrap_or("de"));
+            return Ok(json!({"ok":true,"label":label}));
         }
-        Some("view" | "loadView" | "select" | "selectPhysicalKey" | "viewLayout") => {
-            if let Some(source) = value["source"].as_str() {
-                editor.session.sync(source, value["op"] == "loadView")?;
-            }
-            if let Some(original) = value["comparisonSource"].as_str() {
-                editor.session.set_baseline(original)?;
-            }
-            if let Some(layout) = value["layout"].as_str() {
-                editor.session.layout = layout.into();
-            }
-            if value["op"] == "select" {
-                editor.session.select(
-                    value["layer"].as_u64().map(|n| n as usize),
-                    value["key"].as_u64().map(|n| n as usize),
-                )?;
-            }
-            if value["op"] == "selectPhysicalKey" {
-                editor
-                    .session
-                    .select_physical(value["name"].as_str().ok_or("Tastenname fehlt")?)?;
-            }
-            return Ok(json!({"ok":true,"view":editor.session.view()?}));
+        Command::View(context) | Command::ViewLayout(context) => {
+            view(session, context, false)?;
+            return Ok(json!({"ok":true,"view":session.view()?}));
         }
-        _ => {}
-    }
-    if matches!(value["op"].as_str(), Some("check" | "save" | "worker")) {
-        return runtime::dispatch(&value);
-    }
-    let mut req: Request = serde_json::from_str(input).map_err(|e| e.to_string())?;
-    if value["layer"].is_null() {
-        req.layer = editor.session.layer;
-    }
-    if value["key"].is_null() {
-        req.key = editor.session.key.unwrap_or(0);
-    }
-    if matches!(req.op.as_str(), "setAction" | "setTapHold" | "setMacro")
-        && editor.session.key.is_none()
-        && value["key"].is_null()
-        && editor.session.physical_key.is_some()
+        Command::LoadView(context) => {
+            view(session, context, true)?;
+            return Ok(json!({"ok":true,"view":session.view()?}));
+        }
+        Command::Select {
+            context,
+            layer,
+            key,
+        } => {
+            view(session, context, false)?;
+            session.select(layer, key)?;
+            return Ok(json!({"ok":true,"view":session.view()?}));
+        }
+        Command::SelectPhysicalKey { context, name } => {
+            view(session, context, false)?;
+            session.select_physical(&name)?;
+            return Ok(json!({"ok":true,"view":session.view()?}));
+        }
+        Command::Check {
+            binary,
+            path,
+            source,
+        } => {
+            runtime::check(&binary, &path, &source)?;
+            return Ok(json!({"ok":true}));
+        }
+        Command::Save {
+            path,
+            original,
+            source,
+        } => {
+            let original = STANDARD.decode(original).map_err(|e| e.to_string())?;
+            runtime::save(&path, &original, source.as_bytes())?;
+            return Ok(json!({"ok":true}));
+        }
+        Command::Worker { directory, recover } => {
+            runtime::worker(&directory, recover)?;
+            return Ok(json!({"ok":true}));
+        }
+        Command::ActionDetails { source, layer, key } => {
+            let config = parser::Config::parse(&source)?;
+            let node = config.action(
+                layer.unwrap_or(session.layer),
+                key.unwrap_or(session.key.unwrap_or(0)),
+            )?;
+            return Ok(json!({"ok":true, "details":actions::details(&source, node)}));
+        }
+        Command::Parse { source } => {
+            let forms = parser::parse(&source)?;
+            return Ok(json!({"ok": true, "forms": parser::qt_nodes(&source, &forms)}));
+        }
+        Command::Edit => serde_json::from_str::<Request>(input).map_err(|e| invalid(input, e))?,
+    };
+    let explicit_key = req.key.is_some();
+    req.layer = req.layer.or(Some(session.layer));
+    req.key = req.key.or(Some(session.key.unwrap_or(0)));
+    if matches!(
+        req.edit,
+        Edit::SetAction { .. } | Edit::SetTapHold { .. } | Edit::SetMacro { .. }
+    ) && session.key.is_none()
+        && !explicit_key
     {
-        req.name = editor
-            .session
-            .physical_key
-            .clone()
-            .ok_or("Bitte eine Taste auswählen")?;
-    }
-    if req.op == "actionDetails" {
-        let config = parser::Config::parse(&req.source)?;
-        let node = config.action(req.layer, req.key)?;
-        return Ok(json!({"ok":true, "details":actions::details(&req.source, node)}));
-    }
-    if req.op == "parse" {
-        let forms = parser::parse(&req.source)?;
-        return Ok(json!({"ok": true, "forms": parser::qt_nodes(&req.source, &forms)}));
+        req.physical = session.physical_key.clone();
     }
     let source = editor.execute(&req)?;
-    let view = if req.op != "clear" && req.op != "record" {
-        editor.session.after_edit(&req.op, &source, req.layer)?;
-        Some(editor.session.view()?)
-    } else {
+    let view = if matches!(req.edit, Edit::Clear | Edit::Record { .. }) {
         None
+    } else {
+        let layer = req.layer.unwrap_or(0);
+        editor.session.after_edit(&req.edit, &source, layer)?;
+        Some(editor.session.view()?)
     };
     Ok(
         json!({"ok": true, "source": source, "view":view, "canUndo": editor.can_undo(), "canRedo": editor.can_redo()}),

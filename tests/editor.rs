@@ -300,3 +300,68 @@ fn config_edits_preserve_unrelated_forms_and_reject_managed_roots() {
         );
     }
 }
+
+#[test]
+fn leading_bom_is_skipped_and_preserved_by_edits() {
+    let source = "\u{feff}(defsrc a)\n(deflayer base a)\n";
+    let config = Config::parse(source).unwrap();
+    assert_eq!(config.forms.len(), 2);
+    let mut editor = Editor::default();
+    let edited = editor
+        .execute(&request(
+            source,
+            json!({"op":"setAction","layer":0,"key":0,"expression":"b"}),
+        ))
+        .unwrap();
+    assert_eq!(edited, "\u{feff}(defsrc a)\n(deflayer base b)\n");
+}
+
+#[test]
+fn history_keeps_only_the_newest_entries() {
+    use kanata_studio_core::editor::HISTORY_LIMIT;
+    let mut editor = Editor::default();
+    let mut source = "(defsrc a)\n(deflayer base a)\n".to_owned();
+    let first = source.clone();
+    for step in 0..HISTORY_LIMIT + 5 {
+        let expression = if step % 2 == 0 { "b" } else { "c" };
+        source = editor
+            .execute(&request(
+                &source,
+                json!({"op":"setAction","expression":expression}),
+            ))
+            .unwrap();
+    }
+    let mut undone = 0;
+    while editor.can_undo() {
+        source = editor
+            .execute(&request(&source, json!({"op":"undo"})))
+            .unwrap();
+        undone += 1;
+    }
+    assert_eq!(undone, HISTORY_LIMIT);
+    assert_ne!(source, first);
+}
+
+#[test]
+fn layer_lists_in_chords_and_overrides_follow_renames_and_block_deletes() {
+    let source = "(defsrc a b)\n(deflayer base a b)\n(deflayer nav c d)\n\
+        (defchordsv2 (a b) esc 200 all-released (nav base) (a c) tab 200 first-release ())\n\
+        (defoverridesv2 (a) (b) () (nav))\n";
+    let mut editor = Editor::default();
+    let renamed = editor
+        .execute(&request(
+            source,
+            json!({"op":"renameLayer","layer":1,"name":"arrows"}),
+        ))
+        .unwrap();
+    assert!(renamed.contains("(deflayer arrows c d)"));
+    assert!(renamed.contains("all-released (arrows base)"));
+    assert!(renamed.contains("(defoverridesv2 (a) (b) () (arrows))"));
+    assert!(!renamed.contains("nav"));
+    // Action positions such as `esc` or keys inside the chord tuple must stay untouched.
+    assert!(renamed.contains("(a b) esc 200"));
+    let error = editor
+        .execute(&request(source, json!({"op":"deleteLayer","layer":1})))
+        .unwrap_err();
+    assert_eq!(error, "Ebene wird noch von einer Aktion verwendet");
+}

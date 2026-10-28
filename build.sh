@@ -13,6 +13,6 @@ fi
 python3 tools/prepare-ui.py
 cd qt
 qmake6 kanata-studio-rust.pro
-make -j2 >/dev/null
+make -j"$(nproc 2>/dev/null || echo 2)" >/dev/null
 cd ..
 touch target/build.stamp
