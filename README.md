@@ -21,8 +21,9 @@ require `sudo`.
 
 ### Quick installation
 
-Requirements: x86_64 Linux with glibc 2.36+ and Python 3.10+. You do not need a
-GitHub account, GitHub CLI, Rust, or a compiler.
+Requirements: x86_64 Linux with glibc 2.36+, Python 3.10+, and a desktop
+graphics stack (Mesa or another GLVND driver, as on any Wayland/X11 desktop). You
+do not need a GitHub account, GitHub CLI, Rust, or a compiler.
 
 ```sh
 curl -fL https://raw.githubusercontent.com/KalEl117/kanata-studio-rust/main/install.py -o install.py
@@ -70,8 +71,12 @@ this build baseline.
 The workflow runs on pull requests, `main`, version tags, and manual dispatch. It
 checks the extracted bundle, installation in a temporary directory, and preview
 recovery. Additional container tests on Debian 12, Ubuntu 24.04, and Fedora run
-the finished package without system Qt. These checks do not exercise a real
-Wayland/X11 desktop or replace graphics-driver testing on target machines.
+the finished package without system Qt. The graphics stack (Mesa/GLVND,
+Wayland/X11 client libraries) and the C++ runtime are not bundled: the system
+driver is loaded into the app and needs the system's versions of these
+libraries. The container tests check that the host Mesa driver loads next to the
+bundled libraries (`tools/check-host-graphics.py`). They do not exercise a real
+Wayland/X11 desktop.
 
 After a successful run, the `linux-x86_64-glibc-2.36` Actions artifact contains
 the app and plugin archives, checksums, and download installer. To release, bump

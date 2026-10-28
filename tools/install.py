@@ -29,7 +29,16 @@ def install(bundle, prefix):
     destination = prefix / "share/kanata-studio-rust"
     destination.parent.mkdir(parents=True, exist_ok=True)
     if bundle.resolve() != destination.resolve():
-        shutil.copytree(bundle, destination, dirs_exist_ok=True)
+        # Replace the whole directory: files left over from another build (e.g. Qt plugins for a
+        # different Qt version) would otherwise be loaded by the new one.
+        staged = destination.with_name(".kanata-studio-rust.next")
+        previous = destination.with_name(".kanata-studio-rust.previous")
+        for leftover in (staged, previous):
+            if leftover.exists(): shutil.rmtree(leftover)
+        shutil.copytree(bundle, staged)
+        if destination.exists(): destination.rename(previous)
+        staged.rename(destination)
+        if previous.exists(): shutil.rmtree(previous)
     applications = prefix / "share/applications"
     applications.mkdir(parents=True, exist_ok=True)
     # Escape Desktop Entry argument syntax, including literal percent signs.

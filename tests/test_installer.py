@@ -125,5 +125,37 @@ class InstallerTests(unittest.TestCase):
             run.assert_called_once_with([sys.executable, "/fixture/app/install.py"])
 
 
+
+bundle_spec = importlib.util.spec_from_file_location("bundle_installer", Path(__file__).resolve().parents[1] / "tools/install.py")
+bundle_installer = importlib.util.module_from_spec(bundle_spec)
+bundle_spec.loader.exec_module(bundle_installer)
+
+
+class BundleInstallerTests(unittest.TestCase):
+    def bundle(self, root, files):
+        root.mkdir(parents=True)
+        (root / "manifest.json").write_text(json.dumps({"architecture": bundle_installer.platform.machine(), "minimumGlibc": "2.0"}))
+        (root / "launch.sh").write_text("#!/bin/sh\n")
+        for name, text in files.items():
+            (root / name).parent.mkdir(parents=True, exist_ok=True)
+            (root / name).write_text(text)
+        return root
+
+    def test_reinstall_replaces_files_from_another_build(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            old = self.bundle(folder / "old", {"plugins/platforms/libqwayland.so": "Qt 6.12", "lib/libQt6Core.so.6": "old"})
+            new = self.bundle(folder / "new", {"lib/libQt6Core.so.6": "new"})
+            with patch.dict(bundle_installer.os.environ, {"XDG_STATE_HOME": str(folder / "state")}), \
+                 patch.object(bundle_installer.shutil, "which", return_value=None), patch("builtins.print"):
+                bundle_installer.install(old, folder / "prefix")
+                bundle_installer.install(new, folder / "prefix")
+            installed = folder / "prefix/share/kanata-studio-rust"
+            self.assertFalse((installed / "plugins/platforms/libqwayland.so").exists())
+            self.assertEqual((installed / "lib/libQt6Core.so.6").read_text(), "new")
+            self.assertEqual(sorted(p.name for p in installed.parent.iterdir()), ["applications", "kanata-studio-rust"])
+            self.assertEqual((folder / "prefix/bin/kanata-studio-rust").resolve(), (installed / "launch.sh").resolve())
+
+
 if __name__ == "__main__":
     unittest.main()
