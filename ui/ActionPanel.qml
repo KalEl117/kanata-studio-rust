@@ -501,6 +501,7 @@ Rectangle {
         title: root.tr("Aktion auswählen")
         anchors.centerIn: Overlay.overlay
         modal: true
+        padding: 16
         width: 620
         height: 590
         standardButtons: Dialog.NoButton
@@ -567,6 +568,7 @@ Rectangle {
         width: Math.min(1200, Overlay.overlay.width - 40)
         height: Math.min(660, Overlay.overlay.height - 40)
         standardButtons: Dialog.NoButton
+        padding: 16
         background: Rectangle { color: root.backgroundColor; radius: 7; border.color: Qt.alpha(root.foregroundColor, 0.28) }
         header: Rectangle {
             implicitHeight: 44
