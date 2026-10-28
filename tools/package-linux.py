@@ -17,6 +17,18 @@ from license_materials import copy_project_notices, collect_native_sources
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = tomllib.loads((ROOT / "Cargo.toml").read_text())["package"]["version"]
 HOST_RUNTIME = {"libc.so.6", "libm.so.6", "libpthread.so.0", "libdl.so.2", "librt.so.1", "libresolv.so.2", "libutil.so.1", "ld-linux-x86-64.so.2", "ld-linux-aarch64.so.1"}
+# The system graphics driver (Mesa via GLVND) is loaded into the app and links against these
+# host libraries. Bundled older copies shadow them and the driver fails to load (no EGL/GLX),
+# so they always come from the target system, like glibc. libstdc++/libgcc_s: same reason.
+HOST_GRAPHICS = {
+    "libstdc++.so.6", "libgcc_s.so.1",
+    "libEGL.so.1", "libGL.so.1", "libGLX.so.0", "libGLdispatch.so.0", "libOpenGL.so.0", "libgbm.so.1", "libdrm.so.2",
+    "libwayland-client.so.0", "libwayland-cursor.so.0", "libwayland-egl.so.1", "libwayland-server.so.0",
+    "libX11.so.6", "libX11-xcb.so.1", "libXau.so.6", "libXdmcp.so.6", "libXext.so.6", "libXfixes.so.3", "libXxf86vm.so.1",
+    "libxcb.so.1", "libxcb-dri2.so.0", "libxcb-dri3.so.0", "libxcb-glx.so.0", "libxcb-present.so.0", "libxcb-randr.so.0",
+    "libxcb-shm.so.0", "libxcb-sync.so.1", "libxcb-xfixes.so.0", "libxshmfence.so.1",
+    "libexpat.so.1", "libffi.so.8", "libz.so.1", "libzstd.so.1",
+}
 
 def output(args):
     return subprocess.check_output(args, text=True)
@@ -59,7 +71,7 @@ def build_bundle(bundle, development=False):
         scanned.add(resolved)
         versions.update(re.findall(r"GLIBC_([0-9]+\.[0-9]+)", output(["readelf", "--version-info", str(path)])))
         for dependency in dependencies(path):
-            if dependency.name in HOST_RUNTIME: continue
+            if dependency.name in HOST_RUNTIME or dependency.name in HOST_GRAPHICS: continue
             destination = bundle / "lib" / dependency.name
             if not destination.exists():
                 shutil.copy2(dependency, destination)
@@ -108,7 +120,9 @@ Qt-Selbsttest: QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= ./launch.sh --sel
 Dieses Paket enthält Qt {metadata['qt']}, QML und die benötigten Bibliotheken.
 Rust, Cargo, Node und ein Compiler sind auf dem Zielgerät nicht nötig.
 Zielsystem: Linux {metadata['architecture']} mit glibc {minimum} oder neuer,
-passenden Grafiktreibern und einer Wayland- oder X11-Sitzung.
+passenden Grafiktreibern und einer Wayland- oder X11-Sitzung. Grafik-Stack
+(Mesa/GLVND, Wayland-/X11-Clientbibliotheken) und C++-Laufzeit stammen vom
+System und werden nicht mitgeliefert.
 Kanata und kanata.service müssen auf dem Zielgerät vorhanden sein, um
 Konfigurationen zu prüfen, zu speichern und vorübergehend zu testen.
 Python 3 wird nur für das Installationsskript benötigt.

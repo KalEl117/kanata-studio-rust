@@ -100,12 +100,24 @@ jobs:
     steps:
       - name: Install host runtime only
         run: |
+          # Graphics stack and C++ runtime come from the host, as on a desktop system.
           if command -v apt-get >/dev/null 2>&1; then
             apt-get update
-            apt-get install -y --no-install-recommends python3 ca-certificates libgl1 libegl1 fonts-dejavu-core
+            apt-get install -y --no-install-recommends python3 ca-certificates fonts-dejavu-core \
+              libstdc++6 libgcc-s1 zlib1g libzstd1 libexpat1 libffi8 \
+              libgl1 libegl1 libopengl0 libegl-mesa0 libglx-mesa0 \
+              libwayland-client0 libwayland-cursor0 libwayland-egl1 libx11-6 libx11-xcb1 libxcb1
           else
-            dnf install -y python3 ca-certificates libglvnd-glx libglvnd-egl dejavu-sans-fonts
+            dnf install -y python3 ca-certificates dejavu-sans-fonts \
+              libstdc++ libgcc zlib libzstd expat libffi \
+              libglvnd-glx libglvnd-egl libglvnd-opengl mesa-libEGL mesa-libGL \
+              libwayland-client libwayland-cursor libwayland-egl libX11 libX11-xcb libxcb
           fi
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: tools/check-host-graphics.py
+          sparse-checkout-cone-mode: false
+          path: repo
       - uses: actions/download-artifact@v4
         with:
           name: linux-x86_64-glibc-2.36
@@ -116,6 +128,8 @@ jobs:
           sha256sum -c *.sha256
           tar -xzf kanata-studio-rust-*-linux-x86_64.tar.gz
           python3 kanata-studio-rust-*-linux-x86_64/install.py --prefix /tmp/studio-install
+          # The host Mesa driver must load next to the bundled libraries (offscreen never loads it).
+          python3 ../repo/tools/check-host-graphics.py /tmp/studio-install/share/kanata-studio-rust
           /tmp/studio-install/bin/kanata-studio-rust --display-check
           /tmp/studio-install/bin/kanata-studio-rust --screenshot /tmp/studio.png /tmp/studio-install/share/kanata-studio-rust/share/test.kbd
           test -s /tmp/studio.png

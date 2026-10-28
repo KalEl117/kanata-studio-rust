@@ -21,8 +21,10 @@ und benötigt kein `sudo`.
 
 ### Schnellinstallation
 
-Voraussetzungen: x86_64-Linux mit glibc 2.36+ und Python 3.10+. GitHub-Konto,
-GitHub CLI, Rust oder ein Compiler sind nicht nötig.
+Voraussetzungen: x86_64-Linux mit glibc 2.36+, Python 3.10+ und ein
+Desktop-Grafik-Stack (Mesa oder ein anderer GLVND-Treiber, wie auf jedem
+Wayland-/X11-Desktop). GitHub-Konto, GitHub CLI, Rust oder ein Compiler sind
+nicht nötig.
 
 ```sh
 curl -fL https://raw.githubusercontent.com/KalEl117/kanata-studio-rust/main/install.py -o install.py
@@ -72,8 +74,12 @@ Der Workflow läuft für Pull Requests, `main`, Versionstags und manuell. Er
 prüft das entpackte Paket, eine Installation in einem temporären Verzeichnis
 und die Wiederherstellung. Zusätzliche Container-Starttests unter Debian 12,
 Ubuntu 24.04 und Fedora verwenden das fertige Paket ohne systemweit
-installiertes Qt. Das prüft keinen echten Wayland-/X11-Desktop und ersetzt
-keinen Grafiktreibertest auf den Zielsystemen.
+installiertes Qt. Grafik-Stack (Mesa/GLVND, Wayland-/X11-Clientbibliotheken)
+und C++-Laufzeit werden nicht mitgeliefert: Der Systemtreiber wird in die App
+geladen und braucht die Systemversionen dieser Bibliotheken. Die Containertests
+prüfen, dass der Mesa-Treiber des Systems neben den gebündelten Bibliotheken
+lädt (`tools/check-host-graphics.py`). Einen echten Wayland-/X11-Desktop prüfen
+sie nicht.
 
 Nach einem erfolgreichen Lauf liegen App- und Plugin-Archiv, Prüfsummen und Download-Installer
 im Actions-Artefakt `linux-x86_64-glibc-2.36`. Für ein Release die Version in
