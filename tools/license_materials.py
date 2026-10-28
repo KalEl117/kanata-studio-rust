@@ -76,9 +76,9 @@ def debian_owners(paths):
     aliases = {}
     for path in paths:
         for value in {str(path), str(path.resolve())}:
-            aliases[value] = path
+            aliases.setdefault(value, set()).add(path)
             if value.startswith(('/usr/lib/', '/usr/bin/')):
-                aliases[value[4:]] = path
+                aliases.setdefault(value[4:], set()).add(path)
     result = subprocess.run(['dpkg-query', '-S', *sorted(aliases)], text=True,
                             capture_output=True)
     owners = {}
@@ -89,7 +89,8 @@ def debian_owners(paths):
         if filename in aliases:
             if ', ' in package or package.startswith('diversion '):
                 raise RuntimeError('Ambiguous package owner: ' + line)
-            owners.setdefault(aliases[filename], set()).add(package)
+            for path in aliases[filename]:
+                owners.setdefault(path, set()).add(package)
     missing = [str(path) for path in paths if len(owners.get(path, ())) != 1]
     if missing:
         raise RuntimeError('Missing or ambiguous package owners: ' + ', '.join(missing))

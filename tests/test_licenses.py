@@ -57,6 +57,17 @@ class LicensingTests(unittest.TestCase):
                     with self.assertRaises(RuntimeError):
                         licenses.debian_owners({Path('/usr/lib/example.so')})
 
+    def test_multiple_paths_to_same_file_keep_both_owners(self):
+        with tempfile.TemporaryDirectory() as directory:
+            original = Path(directory, 'example.so.1')
+            original.write_bytes(b'library')
+            alias = Path(directory, 'example.so')
+            alias.symlink_to(original)
+            result = subprocess.CompletedProcess([], 0, f'example:amd64: {original}\n', '')
+            with patch.object(licenses.subprocess, 'run', return_value=result):
+                self.assertEqual(licenses.debian_owners({original, alias}),
+                                 {original: 'example:amd64', alias: 'example:amd64'})
+
     def test_stale_notices_stop_packaging(self):
         with patch.object(licenses, 'rust_notices', return_value='changed lockfile/notices'):
             with self.assertRaisesRegex(RuntimeError, 'stale'):

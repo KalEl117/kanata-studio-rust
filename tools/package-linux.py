@@ -95,7 +95,7 @@ exec "$bundle_dir/bin/kanata-studio-rust" "$@"
     minimum = max(versions, key=lambda version:tuple(map(int,version.split('.'))))
     metadata = {"name":"Kanata Studio Rust", "version":VERSION, "architecture":platform.machine(),
         "license":"MIT", "redistributable":not development,
-        "sourceCommit":output(["git", "-C", str(ROOT), "rev-parse", "HEAD"]).strip(),
+        "sourceCommit":output(["git", "-c", f"safe.directory={ROOT}", "-C", str(ROOT), "rev-parse", "HEAD"]).strip(),
         "minimumGlibc":minimum, "qt":output(["qmake6", "-query", "QT_VERSION"]).strip(),
         "bundledLibraries":sorted(path.name for path in (bundle / "lib").iterdir())}
     (bundle / "manifest.json").write_text(json.dumps(metadata, indent=2)+"\n")
