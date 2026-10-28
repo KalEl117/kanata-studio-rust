@@ -121,14 +121,10 @@ ApplicationWindow {
             if (studio.open(selectedFile.toLocalFile())) editorPanel.sync()
         }
     }
-    Dialog {
+    StudioDialog {
         id: addLayerDialog
         objectName: "addLayerDialog"
         title: window.tr("Neue Ebene")
-        anchors.centerIn: Overlay.overlay
-        modal: true
-        standardButtons: Dialog.NoButton
-        background: Rectangle { color: window.surface; radius: 7; border.color: Qt.alpha(window.fg, 0.25) }
         footer: Rectangle {
             implicitHeight: 52
             color: window.surface
@@ -156,16 +152,12 @@ ApplicationWindow {
         onOpened: { layerNameField.text = ""; layerCopyBox.currentIndex = 0; layerNameField.forceActiveFocus() }
         onAccepted: { if (studio.addLayer(layerNameField.text, layerCopyBox.currentIndex - 1)) editorPanel.sync() }
     }
-    Dialog {
+    StudioDialog {
         id: configDialog
         objectName: "configDialog"
         title: window.tr("Weitere Konfigurationsblöcke")
-        anchors.centerIn: Overlay.overlay
-        modal: true
         width: 760
         height: 610
-        standardButtons: Dialog.NoButton
-        background: Rectangle { color: window.surface; radius: 7; border.color: Qt.alpha(window.fg, 0.25) }
         footer: Rectangle {
             implicitHeight: 54
             color: window.surface
@@ -193,7 +185,7 @@ ApplicationWindow {
             spacing: 9
             RowLayout {
                 Layout.fillWidth: true
-                ComboBox {
+                StudioCombo {
                     id: configFormBox
                     Layout.fillWidth: true
                     model: studio.configForms
@@ -202,7 +194,7 @@ ApplicationWindow {
                 }
                 FlatButton { text: window.tr("+ Neuer Block"); Layout.fillWidth: false; onClicked: addConfigFormDialog.open() }
             }
-            Text { text: window.tr("`defsrc` und `deflayer` werden über die Tastaturansicht bearbeitet. Andere Kanata-Blöcke bleiben als vollständiger Ausdruck editierbar."); color: window.muted; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            Text { text: window.tr("`defsrc` und `deflayer` werden über die Tastaturansicht bearbeitet. Andere Kanata-Blöcke bleiben als vollständiger Ausdruck editierbar."); textFormat: Text.MarkdownText; color: window.muted; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true }
             ScrollView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -223,15 +215,11 @@ ApplicationWindow {
             configFormText.text = studio.configForms.length ? studio.configForms[0].expression : ""
         }
     }
-    Dialog {
+    StudioDialog {
         id: addConfigFormDialog
         title: window.tr("Konfigurationsblock hinzufügen")
-        anchors.centerIn: Overlay.overlay
-        modal: true
         width: 620
         height: 440
-        standardButtons: Dialog.NoButton
-        background: Rectangle { color: window.surface; radius: 7; border.color: Qt.alpha(window.fg, 0.25) }
         footer: Rectangle {
             implicitHeight: 54
             color: window.surface
@@ -262,14 +250,10 @@ ApplicationWindow {
             }
         }
     }
-    Dialog {
+    StudioDialog {
         id: renameLayerDialog
         objectName: "renameLayerDialog"
         title: window.tr("Ebene umbenennen")
-        anchors.centerIn: Overlay.overlay
-        modal: true
-        standardButtons: Dialog.NoButton
-        background: Rectangle { color: window.surface; radius: 7; border.color: Qt.alpha(window.fg, 0.25) }
         footer: DialogActions { targetDialog: renameLayerDialog; acceptLabel: "Übernehmen" }
         contentItem: StudioField {
             id: renameLayerField
@@ -281,33 +265,23 @@ ApplicationWindow {
         onOpened: { renameLayerField.text = studio.layers[studio.selectedLayer] || ""; renameLayerField.selectAll(); renameLayerField.forceActiveFocus() }
         onAccepted: { if (studio.renameLayer(studio.selectedLayer, renameLayerField.text)) editorPanel.sync() }
     }
-    Dialog {
+    StudioDialog {
         id: deleteLayerDialog
         title: window.tr("Ebene löschen")
-        anchors.centerIn: Overlay.overlay
-        modal: true
-        standardButtons: Dialog.NoButton
-        background: Rectangle { color: window.surface; radius: 7; border.color: Qt.alpha(window.fg, 0.25) }
         footer: DialogActions { targetDialog: deleteLayerDialog; acceptLabel: "Löschen" }
         Label { text: window.tr("Ebene „") + (studio.layers[studio.selectedLayer] || "") + window.tr("“ löschen?"); color: window.fg }
         onAccepted: { if (studio.deleteLayer(studio.selectedLayer)) editorPanel.sync() }
     }
-    Dialog {
+    StudioDialog {
         id: discardDialog
         title: window.tr("Ungespeicherte Änderungen")
-        anchors.centerIn: Overlay.overlay
-        modal: true
-        standardButtons: Dialog.NoButton
         footer: DialogActions { targetDialog: discardDialog; acceptLabel: "Entwurf verwerfen" }
         Label { text: window.tr("Entwurf verwerfen und eine andere Datei öffnen?"); color: window.fg }
         onAccepted: fileDialog.open()
     }
-    Dialog {
+    StudioDialog {
         id: closeDialog
         title: window.tr("Ungespeicherter Entwurf")
-        anchors.centerIn: Overlay.overlay
-        modal: true
-        standardButtons: Dialog.NoButton
         footer: DialogActions { targetDialog: closeDialog; acceptLabel: "Verwerfen" }
         Label { text: window.tr("Änderungen verwerfen und Kanata Studio schließen?"); color: window.fg }
         onAccepted: { window.forceClose = true; window.close() }
@@ -318,11 +292,32 @@ ApplicationWindow {
     Shortcut { sequence: StandardKey.Undo; onActivated: window.undoEdit() }
     Shortcut { sequence: StandardKey.Redo; onActivated: window.redoEdit() }
 
+    component StudioDialog: Dialog {
+        id: dialog
+        anchors.centerIn: Overlay.overlay
+        modal: true
+        padding: 16
+        standardButtons: Dialog.NoButton
+        background: Rectangle { color: window.surface; radius: 7; border.color: Qt.alpha(window.fg, 0.25) }
+        header: Rectangle {
+            implicitHeight: 46
+            color: window.chrome
+            radius: 7
+            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 7; color: parent.color }
+            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Qt.alpha(window.fg, 0.12) }
+            Text { anchors.left: parent.left; anchors.leftMargin: 18; anchors.verticalCenter: parent.verticalCenter; text: dialog.title; color: window.fg; font.pixelSize: 15; font.weight: Font.DemiBold }
+        }
+    }
     component FlatButton: Button {
         id: button
         property bool emphasized: false
         font.pixelSize: 13
         font.weight: Font.DemiBold
+        leftPadding: 14
+        rightPadding: 14
+        topPadding: 7
+        bottomPadding: 7
+        opacity: enabled ? 1 : 0.4
         palette.buttonText: emphasized ? window.bg : window.fg
         background: Rectangle {
             radius: 5
@@ -349,6 +344,9 @@ ApplicationWindow {
     component StudioField: TextField {
         color: window.fg
         font.pixelSize: 12
+        implicitHeight: 36
+        leftPadding: 10
+        rightPadding: 10
         selectByMouse: true
         background: Rectangle {
             radius: 5
@@ -383,7 +381,7 @@ ApplicationWindow {
         }
         delegate: ItemDelegate {
             width: control.width
-            text: modelData
+            text: control.textRole ? modelData[control.textRole] : modelData
             font.pixelSize: 11
             palette.buttonText: window.fg
             background: Rectangle { color: highlighted ? Qt.alpha(window.accent, 0.16) : window.surface }
@@ -421,8 +419,8 @@ ApplicationWindow {
                     Text { text: window.tr("Tastaturbelegung"); color: window.fg; font.pixelSize: 20; font.weight: Font.DemiBold }
                 }
                 Item { Layout.fillWidth: true }
-                ComboBox {
-                    Layout.preferredWidth: 108
+                StudioCombo {
+                    Layout.preferredWidth: 112
                     Layout.preferredHeight: 34
                     model: ["Deutsch", "English"]
                     currentIndex: window.uiLanguage === "en" ? 1 : 0
@@ -522,6 +520,8 @@ ApplicationWindow {
                             Layout.column: 0
                             Layout.preferredWidth: 28
                             Layout.preferredHeight: 36
+                            leftPadding: 0
+                            rightPadding: 0
                             text: window.layersVisible ? "‹" : "›"
                             accessibleName: window.tr(window.layersVisible ? "Ebenen ausblenden" : "Ebenen einblenden")
                             Accessible.name: accessibleName
@@ -561,6 +561,8 @@ ApplicationWindow {
                             Layout.column: 3
                             Layout.preferredWidth: 28
                             Layout.preferredHeight: 36
+                            leftPadding: 0
+                            rightPadding: 0
                             text: window.editorVisible ? "›" : "‹"
                             Accessible.name: window.tr(window.editorVisible ? "Tastenbearbeitung ausblenden" : "Tastenbearbeitung einblenden")
                             onClicked: window.editorVisible = !window.editorVisible
