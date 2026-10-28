@@ -27,6 +27,7 @@ class Studio : public QObject {
     Q_PROPERTY(int selectedLayer READ selectedLayer NOTIFY selectionChanged)
     Q_PROPERTY(int selectedKey READ selectedKey NOTIFY selectionChanged)
     Q_PROPERTY(QString selectedPhysicalKey READ selectedPhysicalKey NOTIFY selectionChanged)
+    Q_PROPERTY(bool layerEditable READ layerEditable NOTIFY selectionChanged)
     Q_PROPERTY(QVariantMap selectedKeyState READ selectedKeyState NOTIFY actionsChanged)
     Q_PROPERTY(QVariantList keyStates READ keyStates NOTIFY actionsChanged)
     Q_PROPERTY(QString action READ action NOTIFY actionsChanged)
@@ -60,6 +61,7 @@ public:
     int selectedLayer() const { return m_selectedLayer; }
     int selectedKey() const { return m_selectedKey; }
     QString selectedPhysicalKey() const { return m_selectedPhysicalKey; }
+    bool layerEditable() const { return m_layerEditable; }
     QVariantMap selectedKeyState() const { return m_selectedKeyState; }
     QVariantList keyStates() const { return m_keyStates; }
     QString action() const;
@@ -166,6 +168,7 @@ private:
     int m_selectedLayer = 0;
     int m_selectedKey = -1;
     QString m_selectedPhysicalKey;
+    bool m_layerEditable = true;
     QVariantMap m_selectedKeyState;
     QVariantList m_keyStates;
     bool m_previewReady = false;

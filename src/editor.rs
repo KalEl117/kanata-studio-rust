@@ -276,6 +276,14 @@ fn edit(
     key: usize,
     op: &Edit,
 ) -> Result<String, String> {
+    if config.is_map(layer)
+        && matches!(
+            op,
+            Edit::SetAction { .. } | Edit::SetTapHold { .. } | Edit::SetMacro { .. }
+        )
+    {
+        return Err(parser::MAP_READ_ONLY.into());
+    }
     match op {
         Edit::SetAction { expression } => {
             let value = expression.trim();
@@ -350,6 +358,9 @@ fn edit(
             }
             parser::expression(expression.trim())?;
             config.layer(target)?;
+            if config.is_map(target) && expression.trim() != "_" {
+                return Err(parser::MAP_READ_ONLY.into());
+            }
             if config.forms[config.src].children[1..]
                 .iter()
                 .any(|n| normalized(&n.value) == normalized(key))
@@ -375,7 +386,11 @@ fn edit(
                 (at, format!("{prefix}{value}{suffix}"))
             };
             let mut patches = vec![append(&config.forms[config.src], key)];
+            // A deflayermap needs no entry: unmapped keys are transparent there.
             for (layer, &index) in config.layers.iter().enumerate() {
+                if config.is_map(layer) {
+                    continue;
+                }
                 patches.push(append(
                     &config.forms[index],
                     if layer == target {
@@ -396,6 +411,11 @@ fn edit(
             let name = name.trim();
             valid_name(config, name, None)?;
             let body = if let Some(index) = *copy_from {
+                if config.is_map(index) {
+                    return Err(
+                        "Eine deflayermap-Ebene kann nicht als Vorlage kopiert werden".into(),
+                    );
+                }
                 let layer = config.layer(index)?;
                 source[layer.children[1].end..layer.end - 1].to_owned()
             } else {
@@ -407,10 +427,9 @@ fn edit(
             Ok(format!("{source}\n(deflayer {name}{body})\n"))
         }
         Edit::RenameLayer { name } => {
-            let form = config.layer(layer)?;
             let name = name.trim();
             valid_name(config, name, Some(config.layers[layer]))?;
-            let old = &form.children[1];
+            let old = config.layer_name(layer)?;
             let mut patches = vec![old];
             for form in &config.forms {
                 references(form, &old.value, &mut patches);
@@ -428,7 +447,7 @@ fn edit(
                 return Err("Die letzte Ebene kann nicht gelöscht werden".into());
             }
             let form = config.layer(layer)?;
-            let name = &form.children[1].value;
+            let name = &config.layer_name(layer)?.value;
             let mut found = Vec::new();
             for (index, node) in config.forms.iter().enumerate() {
                 if index != config.layers[layer] {

@@ -42,7 +42,7 @@ impl PluginEditor {
         Ok(json!({"ok":true,"document":{
             "overview":protocol::snapshot(&self.source, &self.original, path, &self.layout)?,
             "dirty":self.source != self.original,"canUndo":self.editor.can_undo(),"canRedo":self.editor.can_redo(),
-            "selectedLayer":selected["selectedLayer"],"selectedPhysicalKey":selected["selectedPhysicalKey"],
+            "selectedLayer":selected["selectedLayer"],"selectedPhysicalKey":selected["selectedPhysicalKey"],"layerEditable":selected["layerEditable"],
             "details":selected["details"],"expression":expression
         }}))
     }

@@ -173,6 +173,8 @@ linux-dev-names-exclude ("Adv360 Pro Keyboard" "Adv360 Pro")
 
 Kommentare und unberührte Dateibereiche bleiben erhalten. Beim Umbenennen werden direkte Ebenenverweise angepasst. Ebenen mit verbleibenden direkten Verweisen können nicht gelöscht werden. Indirekte Verweise über Variablen oder Alias-Konstruktionen benötigen die abschließende Kanata-Prüfung.
 
+Mit `deflayermap` definierte Ebenen erscheinen in Dateireihenfolge zusammen mit `deflayer`-Ebenen. Ausdrückliche Zuordnungen haben Vorrang vor `_`/`___`; nicht zugeordnete Tasten sind wie in Kanata durchlässig. Der Tasteneditor zeigt diese Ebenen nur lesend an; bearbeitet werden sie als Text unter „Konfiguration“. Umbenennen und Löschen funktionieren, und neue physische Tasten fügen dort keine Einträge hinzu.
+
 ## Speichern und Testmodus
 
 Prüfen verwendet eine temporäre Datei im Konfigurationsverzeichnis und begrenzt die Laufzeit des Kanata-Prozesses. Speichern schreibt atomar mit den bisherigen Dateirechten. Externe Änderungen werden erkannt; schlägt das Dienstneuladen fehl, wird die ursprüngliche Datei wiederhergestellt.

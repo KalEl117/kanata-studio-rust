@@ -1,0 +1,10 @@
+;; Mixed deflayer/deflayermap fixture; passes `kanata --check` (v1.12.0).
+(defcfg)
+(defsrc caps a s min)
+(deflayer base (layer-while-held nav) a s min)
+(deflayermap (nav)
+  a left
+  s (tap-hold 200 200 s lctl)
+  Minus grv
+  _ XX)
+(deflayermap (sym) a 1)
