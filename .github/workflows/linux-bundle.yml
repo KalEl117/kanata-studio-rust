@@ -119,3 +119,4 @@ jobs:
           /tmp/studio-install/bin/kanata-studio-rust --display-check
           /tmp/studio-install/bin/kanata-studio-rust --screenshot /tmp/studio.png /tmp/studio-install/share/kanata-studio-rust/share/test.kbd
           test -s /tmp/studio.png
+          /tmp/studio-install/bin/kanata-studio-rust --ui-check /tmp/studio-install/share/kanata-studio-rust/share/test.kbd

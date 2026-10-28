@@ -259,6 +259,7 @@ Avoid editing the same file with another Studio version while saving or testing.
 ~/.cargo/bin/cargo fmt --check
 node --test tests/keyboard-model.test.cjs
 QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= ./run.sh --self-test
+QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= qt/kanata-studio-rust --ui-check tests/fixtures/wrapped-layout.kbd
 python3 tools/check-recovery.py
 python3 tools/check-package.py
 ```

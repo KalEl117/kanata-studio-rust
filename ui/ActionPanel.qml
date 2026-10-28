@@ -304,13 +304,13 @@ Rectangle {
     function populate() {
         var details = backend.actionDetails
         rawArea.text = backend.action
-        tapHead.currentIndex = Math.max(0, tapVariants.indexOf(details.head || "tap-hold"))
+        tapHead.keep(Math.max(0, tapVariants.indexOf(details.head || "tap-hold")))
         repeatField.text = String(details.kind === "tap-hold" ? details.repeat : 150)
         holdField.text = String(details.kind === "tap-hold" ? details.holdMs : 200)
         tapField.text = details.kind === "tap-hold" ? details.tap : (details.kind === "simple" ? details.value : "spc")
-        holdMode.currentIndex = details.holdKind === "modifiers" ? 1 : details.holdKind === "layer" ? 2 : details.holdKind === "action" ? 3 : 0
-        modifierBox.currentIndex = Math.max(0, modifiers.indexOf(details.holdValue || "lctl"))
-        layerBox.currentIndex = Math.max(0, backend.layers.indexOf(details.holdValue || ""))
+        holdMode.keep(details.holdKind === "modifiers" ? 1 : details.holdKind === "layer" ? 2 : details.holdKind === "action" ? 3 : 0)
+        modifierBox.keep(Math.max(0, modifiers.indexOf(details.holdValue || "lctl")))
+        layerBox.keep(Math.max(0, backend.layers.indexOf(details.holdValue || "")))
         customHold.text = details.holdKind === "action" ? details.holdValue : "(multi lctl lshft)"
         var selectedModifiers = details.holdModifiers || []
         holdCtrl.checked = selectedModifiers.indexOf("lctl") >= 0
@@ -321,7 +321,7 @@ Rectangle {
         holdRCtrl.checked = selectedModifiers.indexOf("rctl") >= 0
         holdRShift.checked = selectedModifiers.indexOf("rshift") >= 0
         holdRSuper.checked = selectedModifiers.indexOf("rmeta") >= 0
-        macroVariant.currentIndex = Math.max(0, macroVariants.indexOf(details.kind === "macro" ? details.head : "macro"))
+        macroVariant.keep(Math.max(0, macroVariants.indexOf(details.kind === "macro" ? details.head : "macro")))
         macroSteps.clear()
         if (details.kind === "macro") {
             for (var i = 0; i < details.steps.length; ++i) macroSteps.append({"step": details.steps[i]})
@@ -405,6 +405,25 @@ Rectangle {
     }
     component PanelCombo: ComboBox {
         id: control
+        // Rebuilding the model (language switch, changed layer list) resets currentIndex to 0,
+        // which would silently change what "Apply" writes. Keep the chosen entry and restore it;
+        // byValue restores by text for lists of names whose positions can shift.
+        property bool byValue: false
+        property int keptIndex: -1
+        property string keptValue: ""
+        function keep(index) {
+            currentIndex = index
+            keptIndex = currentIndex
+            keptValue = currentIndex >= 0 ? textAt(currentIndex) : ""
+        }
+        Connections {
+            target: control
+            function onActivated(index) { control.keptIndex = index; control.keptValue = control.textAt(index) }
+        }
+        onModelChanged: {
+            var index = byValue ? find(keptValue) : keptIndex
+            if (index >= 0 && index < count) currentIndex = index
+        }
         implicitHeight: 36
         font.pixelSize: 12
         contentItem: Text {
@@ -497,7 +516,7 @@ Rectangle {
                 Layout.fillWidth: true
                 visible: backend.layers.length > 1
                 Text { text: root.tr("Zielebene"); color: root.mutedColor; font.pixelSize: 12 }
-                PanelCombo { id: actionLayerBox; Layout.fillWidth: true; model: backend.layers; currentIndex: 0; onActivated: root.actionTargetLayer = currentIndex }
+                PanelCombo { id: actionLayerBox; byValue: true; Layout.fillWidth: true; model: backend.layers; onActivated: root.actionTargetLayer = currentIndex }
                 Text { text: root.tr("Einmaliger Modifier"); color: root.mutedColor; font.pixelSize: 12 }
                 PanelCombo { id: actionModifierBox; Layout.preferredWidth: 125; model: root.modifiers; currentIndex: 0; onActivated: root.actionModifier = currentIndex }
             }
@@ -772,7 +791,7 @@ Rectangle {
                 }
                 PanelButton { text: root.tr("Ausgabe wählen"); emphasized: true; onClicked: { if (root.commit()) root.openKeyPicker("output") } }
                 PanelButton { text: root.tr("Tastenkombination"); onClicked: { if (root.commit()) root.openKeyPicker("chord") } }
-                PanelButton { text: root.tr("Weitere Aktionen…"); onClicked: { if (root.commit()) { root.actionTargetLayer = backend.selectedLayer; actionLayerBox.currentIndex = backend.selectedLayer; actionChooser.open() } } }
+                PanelButton { text: root.tr("Weitere Aktionen…"); onClicked: { if (root.commit()) { root.actionTargetLayer = backend.selectedLayer; actionLayerBox.keep(backend.selectedLayer); actionChooser.open() } } }
                 PanelButton { text: root.tr("Durchlassen"); onClicked: { rawArea.text = "_"; root.commit() } }
                 PanelButton {
                     text: (root.actionAdvanced ? "▾  " : "▸  ") + root.tr("Kanata-Ausdruck bearbeiten")
@@ -816,7 +835,7 @@ Rectangle {
                 PanelField { id: tapField; Layout.fillWidth: true; placeholderText: root.tr("z. B. a"); onTextEdited: root.formDirty = true }
                 PanelButton { text: "▦  " + root.tr("Ausgabe über Tastatur wählen"); onClicked: root.openKeyPicker("tap") }
                 Caption { text: root.tr("BEIM HALTEN"); Layout.topMargin: 6 }
-                PanelCombo { id: holdMode; Layout.fillWidth: true; model: [root.tr("Modifier"), root.tr("Mehrere Modifier"), root.tr("Ebene"), root.tr("Andere Aktion")]; onActivated: root.formDirty = true }
+                PanelCombo { id: holdMode; objectName: "holdMode"; Layout.fillWidth: true; model: [root.tr("Modifier"), root.tr("Mehrere Modifier"), root.tr("Ebene"), root.tr("Andere Aktion")]; onActivated: root.formDirty = true }
                 PanelCombo { id: modifierBox; Layout.fillWidth: true; visible: holdMode.currentIndex === 0; model: root.modifiers.map(function(token) { return root.modifierLabel(token) }); onActivated: root.formDirty = true }
                 Flow {
                     Layout.fillWidth: true
@@ -831,7 +850,7 @@ Rectangle {
                     ModCheck { id: holdRShift; text: root.tr("Shift rechts"); onClicked: root.formDirty = true }
                     ModCheck { id: holdRSuper; text: root.tr("Super rechts"); onClicked: root.formDirty = true }
                 }
-                PanelCombo { id: layerBox; Layout.fillWidth: true; visible: holdMode.currentIndex === 2; model: backend.layers; onActivated: root.formDirty = true }
+                PanelCombo { id: layerBox; objectName: "holdLayerBox"; byValue: true; Layout.fillWidth: true; visible: holdMode.currentIndex === 2; model: backend.layers; onActivated: root.formDirty = true }
                 PanelField { id: customHold; Layout.fillWidth: true; visible: holdMode.currentIndex === 3; placeholderText: root.tr("z. B. (multi lctl lshft)"); onTextEdited: root.formDirty = true }
                 PanelButton {
                     text: (root.tapAdvanced ? "▾  " : "▸  ") + root.tr("Erweiterte Einstellungen")
