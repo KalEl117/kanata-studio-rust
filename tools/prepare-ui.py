@@ -9,7 +9,7 @@ changes = {
     "KeyboardModel.js": [],
     "Translations.js": [],
     "main.qml": [("Kanata Studio · Qt Quick", "Kanata Studio · Rust"),
-                 ('studio.displayKeyName(modelData)', '(studio.keyNames[modelData] || studio.displayKeyName(modelData))')],
+                 ('studio.displayKeyName(studio.keys[modelData])', '(studio.keyNames[studio.keys[modelData]] || studio.displayKeyName(studio.keys[modelData]))')],
     "ActionPanel.qml": [('backend.displayKeyName(backend.selectedPhysicalKey)', '(backend.keyNames[backend.selectedPhysicalKey] || backend.displayKeyName(backend.selectedPhysicalKey))')],
 }
 for name, replacements in changes.items():

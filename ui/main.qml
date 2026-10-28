@@ -67,6 +67,19 @@ ApplicationWindow {
         }
         return -1
     }
+    // defsrc keys the drawn keyboard does not show (e.g. media keys); only these need a list.
+    readonly property var hiddenSourceKeys: {
+        var drawn = {}
+        for (var r = 0; r < keyRows.length; ++r)
+            for (var k = 0; k < keyRows[r].length; ++k) {
+                var index = keyIndex(keyRows[r][k][0])
+                if (index >= 0) drawn[index] = true
+            }
+        var hidden = []
+        for (var i = 0; i < studio.keys.length; ++i)
+            if (!drawn[i]) hidden.push(i)
+        return hidden
+    }
     function actionLineText(text) {
         if (uiLanguage !== "en") return text
         if (text.endsWith(" wechseln")) return text.slice(0, -9) + " switch"
@@ -836,6 +849,7 @@ ApplicationWindow {
                         color: window.changeColor; font.pixelSize: 12
                     }
                     Rectangle {
+                        visible: window.hiddenSourceKeys.length > 0
                         Layout.fillWidth: true
                         Layout.leftMargin: 28
                         Layout.rightMargin: 28
@@ -849,19 +863,19 @@ ApplicationWindow {
                             anchors.top: parent.top
                             anchors.margins: 20
                             spacing: 12
-                            Text { text: window.tr("ALLE QUELLTASTEN"); color: window.muted; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 1.8 }
+                            Text { text: window.tr("WEITERE QUELLTASTEN"); color: window.muted; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 1.8 }
+                            Text { text: window.tr("Diese Tasten aus defsrc sind auf der Tastatur oben nicht dargestellt."); color: window.muted; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                             Flow {
                                 Layout.fillWidth: true
                                 spacing: 6
                                 Repeater {
-                                    model: studio.keys
+                                    model: window.hiddenSourceKeys
                                     delegate: Rectangle {
-                                        required property int index
-                                        required property var modelData
+                                        required property int modelData
                                         width: keyText.implicitWidth + 24; height: 28; radius: 6
-                                        color: index === studio.selectedKey ? window.accent : Qt.alpha(window.fg, 0.07)
-                                        Text { id: keyText; anchors.centerIn: parent; text: window.tr(studio.displayKeyName(modelData)); color: index === studio.selectedKey ? window.bg : window.fg; font.pixelSize: 11 }
-                                        MouseArea { anchors.fill: parent; onClicked: window.chooseKey(index) }
+                                        color: modelData === studio.selectedKey ? window.accent : Qt.alpha(window.fg, 0.07)
+                                        Text { id: keyText; anchors.centerIn: parent; text: window.tr(studio.displayKeyName(studio.keys[modelData])); color: modelData === studio.selectedKey ? window.bg : window.fg; font.pixelSize: 11 }
+                                        MouseArea { anchors.fill: parent; onClicked: window.chooseKey(modelData) }
                                     }
                                 }
                             }
