@@ -183,6 +183,30 @@ ShellRoot {
                 widget.perform({op:"pluginDiscard",path:Quickshell.env("KANATA_PLUGIN_TEST_CONFIG")})
                 tryCompare(widget, "overviewLoading", false)
                 verify(!widget.document.dirty)
+                // deflayermap layer: an unmapped (transparent) key gets its own mapping.
+                layerChoices.itemAt(1).clicked()
+                tryCompare(widget, "overviewLoading", false)
+                compare(widget.previewLayer, 1, widget.overviewError)
+                mouseClick(homeTiles.itemAt(0), 10, 10, Qt.LeftButton)
+                tryCompare(widget, "overviewLoading", false)
+                compare(editor.mode, "simple")
+                findChild(editor, "kanataActionInput").text = "tab"
+                verify(editor.pending)
+                findChild(editor, "kanataApplyEdit").clicked()
+                tryCompare(widget, "overviewLoading", false)
+                verify(widget.document.dirty)
+                compare(mini.stateFor("CapsLock").kind, "own")
+                verify(mini.outputFor("CapsLock").indexOf("Tab") >= 0)
+                widget.perform({op:"pluginDiscard",path:Quickshell.env("KANATA_PLUGIN_TEST_CONFIG")})
+                tryCompare(widget, "overviewLoading", false)
+                verify(!widget.document.dirty)
+                // Discard returns to the base layer; the map layer is back to transparent.
+                compare(widget.previewLayer, 0)
+                layerChoices.itemAt(1).clicked()
+                tryCompare(widget, "overviewLoading", false)
+                compare(mini.stateFor("CapsLock").kind, "inherited")
+                layerChoices.itemAt(0).clicked()
+                tryCompare(widget, "overviewLoading", false)
                 var refreshButton = findChild(widget, "kanataRefreshButton")
                 var launchButton = findChild(widget, "kanataStudioLaunchButton")
                 verify(refreshButton !== null && launchButton !== null)
@@ -215,7 +239,7 @@ def main():
             (path / name).symlink_to(pathlib.Path("/usr/share/omarchy/shell") / name, target_is_directory=True)
         (path / "shell.qml").write_text(SMOKE)
         fixture = path / "preview.kbd"
-        saved = "(defsrc caps a Semicolon)\n(deflayer base (tap-hold 150 200 esc lctl) a b)\n(deflayer nav _ left _)\n"
+        saved = "(defsrc caps a Semicolon)\n(deflayer base (tap-hold 150 200 esc lctl) a b)\n(deflayermap (nav) a left)\n"
         fixture.write_text(saved)
         env = dict(os.environ, QT_QPA_PLATFORM="offscreen", QT_QPA_PLATFORMTHEME="", QSG_RHI_BACKEND="software")
         env["KANATA_PLUGIN_TEST_CONFIG"] = str(fixture)
@@ -229,7 +253,7 @@ def main():
                 or "PLUGIN_SMOKE_FAILED" in output
                 or re.search(r"ReferenceError:|TypeError:|Failed to load configuration", output)):
             raise SystemExit(output)
-        print("Plugin-Smoke-Test bestanden: Studio-Geometrie, ISO-Enter, Tastenklick, Tap-Hold-Bearbeitung, Undo/Redo und unveränderte aktive Datei.")
+        print("Plugin-Smoke-Test bestanden: Studio-Geometrie, ISO-Enter, Tastenklick, Tap-Hold-Bearbeitung, Undo/Redo, Bearbeitung einer deflayermap-Ebene und unveränderte aktive Datei.")
 
 
 if __name__ == "__main__":

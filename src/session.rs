@@ -164,7 +164,6 @@ impl Session {
             "keys":config.forms[config.src].children[1..].iter().map(|n|n.value.as_str()).collect::<Vec<_>>(),
             "keyNames":config.forms[config.src].children[1..].iter().map(|n|(n.value.as_str(),environment::key_label(&n.value,layout))).collect::<std::collections::BTreeMap<_,_>>(),
             "layers":(0..config.layers.len()).map(|i|config.layer_name(i).map(|n|n.value.as_str())).collect::<Result<Vec<_>,_>>()?,
-            "layerEditable":!config.is_map(self.layer),
             "actions":nodes.iter().map(|n|n.raw(&self.source)).collect::<Vec<_>>(),
             "labels":nodes.iter().map(|n|summary(n,layout)).collect::<Vec<_>>(),
             "details":details,"configForms":config_forms,"parses":self.parses}),

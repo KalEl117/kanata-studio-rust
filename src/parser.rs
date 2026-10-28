@@ -180,10 +180,6 @@ pub fn expression(source: &str) -> Result<Node, String> {
     Ok(nodes.remove(0))
 }
 
-/// Message for edits the key editor cannot apply to a `deflayermap` layer.
-pub const MAP_READ_ONLY: &str =
-    "Ebenen aus deflayermap sind hier nur lesbar. Bearbeiten unter „Konfiguration“.";
-
 #[derive(Clone)]
 pub struct Config {
     pub forms: Vec<Node>,
@@ -288,21 +284,35 @@ impl Config {
                 .get(key.saturating_add(2))
                 .ok_or("Bitte eine Taste auswählen".into());
         }
+        if let Some(action) = self.mapping(layer, key)? {
+            return Ok(action);
+        }
+        let fallback = form.children[2..]
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .rfind(|pair| !pair[0].list && matches!(pair[0].value.as_str(), "_" | "___"));
+        Ok(fallback.map_or(&self.transparent, |pair| &pair[1]))
+    }
+
+    /// The explicit action for a defsrc key in a `deflayermap`; `None` when the key falls back
+    /// to `_`/`___` or is transparent. Editing must patch only this node, never the fallback.
+    pub fn mapping(&self, layer: usize, key: usize) -> Result<Option<&Node>, String> {
+        let form = self.layer(layer)?;
         let input = self.forms[self.src]
             .children
             .get(key.saturating_add(1))
             .ok_or("Bitte eine Taste auswählen")?;
         let target = crate::editor::normalized(&input.value);
-        let mut fallback = None;
-        for pair in form.children[2..].as_chunks::<2>().0 {
-            match pair[0].value.as_str() {
-                _ if pair[0].list => {}
-                "_" | "___" => fallback = Some(&pair[1]),
-                "__" => {}
-                name if crate::editor::normalized(name) == target => return Ok(&pair[1]),
-                _ => {}
-            }
-        }
-        Ok(fallback.unwrap_or(&self.transparent))
+        Ok(form.children[2..]
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .find(|pair| {
+                !pair[0].list
+                    && !matches!(pair[0].value.as_str(), "_" | "__" | "___")
+                    && crate::editor::normalized(&pair[0].value) == target
+            })
+            .map(|pair| &pair[1]))
     }
 }

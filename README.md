@@ -259,9 +259,11 @@ with Kanata.
 
 Layers defined with `deflayermap` are shown in file order alongside `deflayer`
 layers. Explicit mappings take precedence over `_`/`___`; unmapped keys are
-transparent, as in Kanata. The key editor shows these layers read-only; edit them
-as text under "Configuration". They can be renamed and deleted, and new physical
-keys do not add entries to them.
+transparent, as in Kanata. In the key editor, changing a key with its own mapping
+replaces only that action. Otherwise a `key action` entry is added to the map.
+The `_`/`___` fallback is never changed because it also applies to other keys.
+Map layers can be renamed, deleted, and copied as a new map layer. New physical
+keys only add an entry to a map layer when they get an action there.
 
 ## Saving and test mode
 

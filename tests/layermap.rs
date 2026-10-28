@@ -1,8 +1,4 @@
-use kanata_studio_core::{
-    dispatch,
-    editor::Editor,
-    parser::{Config, MAP_READ_ONLY},
-};
+use kanata_studio_core::{dispatch, editor::Editor, parser::Config};
 use serde_json::{Value, json};
 
 const SOURCE: &str = include_str!("fixtures/layermap.kbd");
@@ -32,37 +28,105 @@ fn map_layers_count_in_file_order_and_resolve_like_kanata() {
 }
 
 #[test]
-fn view_marks_map_layers_read_only_and_shows_inherited_keys() {
+fn view_shows_map_layers_with_inherited_keys() {
     let mut editor = Editor::default();
     call(&mut editor, json!({"op":"loadView","source":SOURCE}));
     let view = &call(&mut editor, json!({"op":"select","layer":2}))["view"];
     assert_eq!(view["layers"], json!(["base", "nav", "sym"]));
-    assert_eq!(view["layerEditable"], false);
     assert_eq!(view["actions"], json!(["_", "1", "_", "_"]));
     assert_eq!(view["keyStates"][0]["kind"], "inherited");
-    let base = &call(&mut editor, json!({"op":"select","layer":0}))["view"];
-    assert_eq!(base["layerEditable"], true);
+}
+
+fn edit(source: &str, layer: usize, key: usize, request: Value) -> String {
+    let mut editor = Editor::default();
+    call(&mut editor, json!({"op":"loadView","source":source}));
+    call(&mut editor, json!({"op":"select","layer":layer,"key":key}));
+    let mut request = request;
+    request["source"] = json!(source);
+    let result = call(&mut editor, request)["source"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    Config::parse(&result).unwrap();
+    result
+}
+
+fn set(source: &str, layer: usize, key: usize, expression: &str) -> String {
+    edit(
+        source,
+        layer,
+        key,
+        json!({"op":"setAction","expression":expression}),
+    )
 }
 
 #[test]
-fn edits_on_map_layers_are_refused_without_touching_history() {
+fn map_edits_patch_explicit_mappings_in_place() {
+    let changed = set(SOURCE, 1, 1, "b");
+    assert_eq!(changed, SOURCE.replace("  a left\n", "  a b\n"));
+    // `min` in defsrc is mapped as `Minus`: no second entry.
+    let changed = set(SOURCE, 1, 3, "b");
+    assert_eq!(changed, SOURCE.replace("Minus grv", "Minus b"));
+    let changed = edit(
+        SOURCE,
+        1,
+        2,
+        json!({"op":"setTapHold","head":"tap-hold","repeatMs":150,"holdMs":180,"tap":"s","hold":"lalt"}),
+    );
+    assert_eq!(
+        changed,
+        SOURCE.replace("(tap-hold 200 200 s lctl)", "(tap-hold 150 180 s lalt)")
+    );
+}
+
+#[test]
+fn map_edits_add_a_mapping_and_never_touch_the_fallback() {
+    // caps falls back to `_ XX` in nav; changing it must not change the other fallback keys.
+    let changed = set(SOURCE, 1, 0, "esc");
+    assert_eq!(changed, SOURCE.replace("  _ XX)", "  _ XX\n  caps esc\n)"));
+    let config = Config::parse(&changed).unwrap();
+    assert_eq!(config.action(1, 0).unwrap().value, "esc");
+    // Transparent on purpose: needs an explicit `caps _` to beat the fallback.
+    let changed = set(SOURCE, 1, 0, "_");
+    assert!(changed.contains("  caps _\n)"));
+    assert_eq!(
+        Config::parse(&changed).unwrap().action(1, 0).unwrap().value,
+        "_"
+    );
+    // The fallback already yields the requested action: nothing to write.
+    assert_eq!(set(SOURCE, 1, 0, "XX"), SOURCE);
+
+    // sym has no fallback: unmapped keys are transparent.
+    assert_eq!(set(SOURCE, 2, 0, "_"), SOURCE);
+    let changed = edit(
+        SOURCE,
+        2,
+        2,
+        json!({"op":"setTapHold","head":"tap-hold","repeatMs":150,"holdMs":200,"tap":"s","hold":"lctl"}),
+    );
+    assert!(changed.ends_with("(deflayermap (sym) a 1 s (tap-hold 150 200 s lctl))\n"));
+    let changed = edit(
+        SOURCE,
+        2,
+        3,
+        json!({"op":"setMacro","head":"macro","steps":["a","10","b"]}),
+    );
+    assert!(changed.ends_with("(deflayermap (sym) a 1 min (macro a 10 b))\n"));
+}
+
+#[test]
+fn map_edits_are_one_undo_step() {
     let mut editor = Editor::default();
     call(&mut editor, json!({"op":"loadView","source":SOURCE}));
-    call(&mut editor, json!({"op":"select","layer":1,"key":1}));
-    for request in [
-        json!({"op":"setAction","source":SOURCE,"expression":"b"}),
-        json!({"op":"setTapHold","source":SOURCE,"head":"tap-hold","repeatMs":150,"holdMs":200,"tap":"a","hold":"lctl"}),
-        json!({"op":"setMacro","source":SOURCE,"head":"macro","steps":["a"]}),
-        json!({"op":"addLayer","source":SOURCE,"name":"copy","copyFrom":1}),
-    ] {
-        assert!(dispatch(&mut editor, &request.to_string()).is_err());
-    }
-    let error = dispatch(
+    call(&mut editor, json!({"op":"select","layer":1,"key":0}));
+    let changed = call(
         &mut editor,
-        &json!({"op":"setAction","source":SOURCE,"expression":"b"}).to_string(),
-    )
-    .unwrap_err();
-    assert_eq!(error, MAP_READ_ONLY);
+        json!({"op":"setAction","source":SOURCE,"expression":"esc"}),
+    );
+    let changed = changed["source"].as_str().unwrap();
+    assert!(editor.can_undo());
+    let undone = call(&mut editor, json!({"op":"undo","source":changed}));
+    assert_eq!(undone["source"], SOURCE);
     assert!(!editor.can_undo());
 }
 
@@ -98,6 +162,29 @@ fn new_physical_keys_rename_and_delete_keep_map_layers_valid() {
         .unwrap_err(),
         "Ebene wird noch von einer Aktion verwendet"
     );
+    let added = call(
+        &mut editor,
+        json!({"op":"addPhysicalKey","source":SOURCE,"name":"F1","expression":"b","layer":2}),
+    );
+    let added = added["source"].as_str().unwrap();
+    assert!(added.contains("(deflayer base (layer-while-held nav) a s min _)"));
+    assert!(added.ends_with("(deflayermap (sym) a 1 F1 b)\n"));
+    assert!(added.contains("  _ XX)"));
+    assert_eq!(
+        Config::parse(added).unwrap().action(2, 4).unwrap().value,
+        "b"
+    );
+
+    let copied = call(
+        &mut editor,
+        json!({"op":"addLayer","source":SOURCE,"name":"copy","copyFrom":1}),
+    );
+    let copied = copied["source"].as_str().unwrap();
+    let config = Config::parse(copied).unwrap();
+    assert!(config.is_map(3));
+    assert_eq!(config.action(3, 1).unwrap().value, "left");
+    assert_eq!(config.action(3, 0).unwrap().value, "XX");
+
     let deleted = call(
         &mut editor,
         json!({"op":"deleteLayer","source":SOURCE,"layer":2}),

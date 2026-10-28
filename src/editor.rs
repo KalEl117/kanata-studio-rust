@@ -158,6 +158,21 @@ fn patch(source: &str, node: &Node, value: &str) -> String {
     result
 }
 
+/// Insert `value` as the last entry of `form`, matching its one-line or multi-line layout.
+fn append(source: &str, form: &Node, value: &str) -> (usize, String) {
+    let at = form.end - 1;
+    let multiline = source[form.start..at].contains('\n');
+    let prefix = match (multiline, source[..at].ends_with('\n')) {
+        (false, _) => " ",
+        (true, true) => "  ",
+        (true, false) => "\n  ",
+    };
+    (
+        at,
+        format!("{prefix}{value}{}", if multiline { "\n" } else { "" }),
+    )
+}
+
 fn editable(node: &Node) -> bool {
     node.list && !node.head().is_empty() && !matches!(node.head(), "defsrc" | "deflayer")
 }
@@ -276,13 +291,28 @@ fn edit(
     key: usize,
     op: &Edit,
 ) -> Result<String, String> {
+    // In a deflayermap only an explicit `key action` pair may change: the `_`/`___` fallback
+    // also covers other keys. Without a pair, add a transparent one for this key and edit that.
     if config.is_map(layer)
         && matches!(
             op,
             Edit::SetAction { .. } | Edit::SetTapHold { .. } | Edit::SetMacro { .. }
         )
+        && config.mapping(layer, key)?.is_none()
     {
-        return Err(parser::MAP_READ_ONLY.into());
+        let current = config.action(layer, key)?;
+        if let Edit::SetAction { expression } = op
+            && !current.list
+            && current.value == expression.trim()
+        {
+            return Ok(source.to_owned());
+        }
+        let name = &config.forms[config.src].children[key + 1].value;
+        let (at, value) = append(source, config.layer(layer)?, &format!("{name} _"));
+        let mut staged = source.to_owned();
+        staged.insert_str(at, &value);
+        let staged_config = Config::parse(&staged)?;
+        return edit(&staged, &staged_config, layer, key, op);
     }
     match op {
         Edit::SetAction { expression } => {
@@ -358,47 +388,23 @@ fn edit(
             }
             parser::expression(expression.trim())?;
             config.layer(target)?;
-            if config.is_map(target) && expression.trim() != "_" {
-                return Err(parser::MAP_READ_ONLY.into());
-            }
             if config.forms[config.src].children[1..]
                 .iter()
                 .any(|n| normalized(&n.value) == normalized(key))
             {
                 return Err("Diese Taste ist bereits in defsrc enthalten".into());
             }
-            let append = |form: &Node, value: &str| {
-                let at = form.end - 1;
-                let prefix = if source[form.start..at].contains('\n') {
-                    if source[..at].ends_with('\n') {
-                        "  "
-                    } else {
-                        "\n  "
-                    }
-                } else {
-                    " "
-                };
-                let suffix = if source[form.start..at].contains('\n') {
-                    "\n"
-                } else {
-                    ""
-                };
-                (at, format!("{prefix}{value}{suffix}"))
-            };
-            let mut patches = vec![append(&config.forms[config.src], key)];
-            // A deflayermap needs no entry: unmapped keys are transparent there.
+            let expression = expression.trim();
+            let mut patches = vec![append(source, &config.forms[config.src], key)];
             for (layer, &index) in config.layers.iter().enumerate() {
-                if config.is_map(layer) {
-                    continue;
+                let form = &config.forms[index];
+                let value = if layer == target { expression } else { "_" };
+                if !config.is_map(layer) {
+                    patches.push(append(source, form, value));
+                } else if value != "_" {
+                    // A deflayermap only needs an entry for a real action.
+                    patches.push(append(source, form, &format!("{key} {value}")));
                 }
-                patches.push(append(
-                    &config.forms[index],
-                    if layer == target {
-                        expression.trim()
-                    } else {
-                        "_"
-                    },
-                ));
             }
             patches.sort_by_key(|p| std::cmp::Reverse(p.0));
             let mut result = source.to_owned();
@@ -411,13 +417,12 @@ fn edit(
             let name = name.trim();
             valid_name(config, name, None)?;
             let body = if let Some(index) = *copy_from {
-                if config.is_map(index) {
-                    return Err(
-                        "Eine deflayermap-Ebene kann nicht als Vorlage kopiert werden".into(),
-                    );
-                }
                 let layer = config.layer(index)?;
-                source[layer.children[1].end..layer.end - 1].to_owned()
+                let body = &source[layer.children[1].end..layer.end - 1];
+                if config.is_map(index) {
+                    return Ok(format!("{source}\n(deflayermap ({name}){body})\n"));
+                }
+                body.to_owned()
             } else {
                 format!(
                     "\n  {}\n",
