@@ -88,6 +88,21 @@ fn popup_drafts_survive_restart_and_save_validates_conflicts_and_reload_failure(
     let changed=client.request(json!({"op":"pluginSetTapHold","head":"tap-hold","repeatMs":150,"holdMs":200,"tap":"tab","hold":"lctl"}));
     assert_eq!(changed["document"]["dirty"], true);
     assert_eq!(changed["document"]["details"]["wrapped"], true);
+    let refreshed = client.request(json!({"op":"pluginEnvironment","layoutInfo":{"id":"de","choice":"us","keyboard":{"type":"external","fullSize":true}}}));
+    assert_eq!(refreshed["document"]["dirty"], true);
+    assert_eq!(refreshed["document"]["canUndo"], true);
+    assert_eq!(
+        refreshed["document"]["selectedPhysicalKey"],
+        changed["document"]["selectedPhysicalKey"]
+    );
+    assert_eq!(
+        refreshed["document"]["details"],
+        changed["document"]["details"]
+    );
+    assert_eq!(
+        refreshed["document"]["overview"]["layoutInfo"]["choice"],
+        "us"
+    );
     assert_eq!(fs::read_to_string(&config).unwrap(), original);
     assert_eq!(
         client.request(json!({"op":"pluginUndo"}))["document"]["dirty"],

@@ -6,6 +6,7 @@ root = Path(__file__).resolve().parents[1]
 target = root / "target/ui"
 target.mkdir(parents=True, exist_ok=True)
 changes = {
+    "KeyboardModel.js": [],
     "main.qml": [("Kanata Studio · Qt Quick", "Kanata Studio · Rust"),
                  ('studio.displayKeyName(modelData)', '(studio.keyNames[modelData] || studio.displayKeyName(modelData))')],
     "ActionPanel.qml": [('backend.displayKeyName(backend.selectedPhysicalKey)', '(backend.keyNames[backend.selectedPhysicalKey] || backend.displayKeyName(backend.selectedPhysicalKey))')],

@@ -61,13 +61,15 @@ void Studio::setLayoutChoice(const QString &choice) {
     m_layoutInfo.insert("choice", choice); m_keyNames.clear();
     if (!m_source.isEmpty()) refresh();
     emit layoutChanged(); emit changed();
+    detectKeyboardLayout();
 }
 
 void Studio::detectKeyboardLayout() {
     if (m_environmentWatcher.isRunning()) return;
-    m_environmentWatcher.setFuture(QtConcurrent::run([] {
+    const QByteArray request = QJsonDocument(QJsonObject{{"op", "environment"}, {"config", m_original}}).toJson(QJsonDocument::Compact);
+    m_environmentWatcher.setFuture(QtConcurrent::run([request] {
         void *editor = ks_editor_new();
-        char *response = ks_editor_request(editor, "{\"op\":\"environment\"}");
+        char *response = ks_editor_request(editor, request.constData());
         const QJsonObject result = response ? QJsonDocument::fromJson(QByteArray(response)).object() : QJsonObject{};
         ks_string_free(response); ks_editor_free(editor);
         return result;

@@ -20,6 +20,47 @@ fn keyboard(name: &str, location: &str, iso: bool) -> String {
     )
 }
 #[test]
+fn full_size_usb_keyboard_wins_over_laptop_and_mouse_interfaces() {
+    let mut words = [0u64; 8];
+    for code in [30, 44, 71, 79, 82, 83, 86, 96, 102, 111] {
+        words[code / 64] |= 1u64 << (code % 64);
+    }
+    let bitmap = words
+        .iter()
+        .rev()
+        .map(|word| format!("{word:x}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let cherry = format!(
+        "I: Bus=0003 Vendor=046a Product=c12a\nN: Name=\"CHERRY CHERRY USB KEYBOARD\"\nP: Phys=usb/1\nH: Handlers=kbd event22\nB: KEY={bitmap}\n\n"
+    );
+    let mouse = cherry
+        .replace("CHERRY CHERRY USB KEYBOARD", "Mouse Keyboard")
+        .replace("\n\n", "\nB: REL=1040\n\n");
+    let bluetooth = cherry
+        .replace("Bus=0003", "Bus=0005")
+        .replace("CHERRY CHERRY USB KEYBOARD", "Adv360 Pro Keyboard");
+    let input = format!(
+        "{}{}{}{}",
+        keyboard("AT Translated Set 2 keyboard", "i8042", true),
+        bluetooth,
+        mouse,
+        cherry
+    );
+    let hypr =
+        json!({"keyboards":[{"name":"AT Translated Set 2 keyboard","main":true,"layout":"de"}]})
+            .to_string();
+    let result = environment::layout(&hypr, "", &input, "ThinkPad", "auto");
+    assert_eq!(result["keyboard"]["name"], "CHERRY CHERRY USB KEYBOARD");
+    assert_eq!(result["keyboard"]["fullSize"], true);
+    assert_eq!(result["geometry"], "iso");
+    assert_eq!(
+        environment::layout(&hypr, "", &input, "ThinkPad", "thinkpad")["keyboard"]["type"],
+        "built-in"
+    );
+    assert!(environment::choice_valid("fullsize"));
+}
+#[test]
 fn layout_uses_active_physical_hyprland_keyboard_and_ignores_virtual_devices() {
     let hypr=json!({"keyboards":[{"name":"kanata","main":true,"layout":"us"},
         {"name":"AT Translated Set 2 keyboard","main":true,"layout":"us,de","active_layout_index":1}]}).to_string();
@@ -78,6 +119,94 @@ fn labels_follow_layout_and_handle_unicode_and_modifiers() {
 }
 
 #[test]
+fn hotplug_switches_to_ordinary_external_and_back_without_selecting_firmware() {
+    let laptop = keyboard("AT Translated Set 2 keyboard", "i8042", true);
+    let firmware = keyboard("Adv360 Pro Keyboard", "bluetooth", true);
+    let usb = format!(
+        "I: Bus=0003 Vendor=046a Product=c12a\n{}",
+        keyboard("CHERRY USB Keyboard", "platform/usb/1", true)
+    );
+    let cfg = "(defcfg linux-device-detect-mode keyboard-only linux-dev-names-exclude (\"Adv360 Pro Keyboard\"))";
+    let hypr = json!({"keyboards":[
+        {"name":"power-button","layout":"gb","main":true},
+        {"name":"at-translated-set-2-keyboard","layout":"de"},
+        {"name":"cherry-usb-keyboard","layout":"us,de","active_keymap":"English (US)"},
+        {"name":"adv360-pro-keyboard","layout":"gb"}]})
+    .to_string();
+    for (input, name, lang) in [
+        (
+            format!("{laptop}{firmware}"),
+            "AT Translated Set 2 keyboard",
+            "de",
+        ),
+        (
+            format!("{laptop}{firmware}{usb}"),
+            "CHERRY USB Keyboard",
+            "us",
+        ),
+        (
+            format!("{laptop}{firmware}"),
+            "AT Translated Set 2 keyboard",
+            "de",
+        ),
+    ] {
+        let result = environment::layout_for_config(
+            &hypr,
+            "KEYMAP=gb",
+            &input,
+            "ThinkPad",
+            "auto",
+            Some(cfg),
+        );
+        assert_eq!(result["keyboard"]["name"], name);
+        assert_eq!(result["id"], lang);
+        let devices = result["devices"].as_array().unwrap();
+        assert_eq!(
+            devices
+                .iter()
+                .find(|d| d["name"] == "Adv360 Pro Keyboard")
+                .unwrap()["captured"],
+            false
+        );
+        if name == "CHERRY USB Keyboard" {
+            assert_eq!(result["keyboard"]["type"], "external");
+        }
+    }
+}
+
+#[test]
+fn only_firmware_does_not_invent_an_editable_standard_keyboard() {
+    let input = keyboard("Adv360 Pro Keyboard", "bluetooth", true);
+    let result = environment::layout("", "", &input, "ThinkPad", "auto");
+    assert_eq!(result["available"], false);
+    assert_eq!(result["keyboard"], json!({}));
+    assert_eq!(result["devices"][0]["firmware"], true);
+    assert_eq!(result["devices"][0]["fullSize"], false);
+}
+
+#[test]
+fn configured_filters_determine_the_editor_target_and_display_is_read_only() {
+    let input = format!(
+        "{}{}",
+        keyboard("Internal Keyboard", "i8042", true),
+        keyboard("USB Keyboard", "usb", false)
+    );
+    let config = "(defcfg linux-dev-names-include (\"Internal Keyboard\"))";
+    for choice in ["auto", "fullsize", "us", "gb", "tkl"] {
+        let result =
+            environment::layout_for_config("", "", &input, "ThinkPad", choice, Some(config));
+        assert_eq!(result["keyboard"]["name"], "Internal Keyboard");
+        assert_eq!(result["devices"][1]["captured"], false);
+    }
+    // Unknown keyboards cannot be classified as firmware from the bus/vendor alone.
+    assert!(!environment::firmware_keyboard(
+        "CHERRY CHERRY USB KEYBOARD"
+    ));
+    assert!(environment::firmware_keyboard("Kinesis Advantage360 Pro"));
+    assert!(environment::firmware_keyboard("My QMK Keyboard"));
+}
+
+#[test]
 fn preferences_migrate_and_persist_without_touching_other_user_settings() {
     use std::{
         fs,
@@ -117,6 +246,16 @@ fn preferences_migrate_and_persist_without_touching_other_user_settings() {
         "gb"
     );
     assert!(call(json!({"op":"layoutChoice","choice":"us"})).0);
+    fs::write(
+        root.join("kanata-studio-rust/settings.json"),
+        "{\"layout\":\"us\",\"futureSetting\":42}",
+    )
+    .unwrap();
+    assert!(call(json!({"op":"layoutChoice","choice":"us"})).0);
+    let settings: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.join("kanata-studio-rust/settings.json")).unwrap())
+            .unwrap();
+    assert_eq!(settings["futureSetting"], 42);
     assert_eq!(
         call(json!({"op":"environment"})).1["layout"]["choice"],
         "us"

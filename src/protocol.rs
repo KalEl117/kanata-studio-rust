@@ -27,10 +27,9 @@ fn overview(value: &Value) -> Result<Value, String> {
     let path = config_path(value)?;
     let source =
         fs::read_to_string(&path).map_err(|error| format!("{}: {error}", path.display()))?;
-    let layout_info = value
-        .get("layoutInfo")
-        .cloned()
-        .unwrap_or_else(|| crate::environment::discover()["layout"].clone());
+    let layout_info = value.get("layoutInfo").cloned().unwrap_or_else(|| {
+        crate::environment::discover_for_config(Some(&source))["layout"].clone()
+    });
     Ok(json!({"ok":true,"overview":snapshot(&source, &source, &path, &layout_info)?}))
 }
 
@@ -41,7 +40,7 @@ pub(crate) fn snapshot(
     layout_info: &Value,
 ) -> Result<Value, String> {
     let mut session = crate::session::Session::default();
-    session.layout = layout_info["id"].as_str().unwrap_or("de").into();
+    session.layout = crate::environment::display_layout(layout_info).into();
     session.sync(source, true)?;
     session.set_baseline(baseline)?;
     let initial = session.view()?;
