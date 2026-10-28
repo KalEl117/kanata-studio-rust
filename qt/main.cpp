@@ -427,6 +427,10 @@ int main(int argc, char *argv[]) {
             if (auto *panel = engine.rootObjects().first()->findChild<QObject *>("editorPanel")) QMetaObject::invokeMethod(panel, "sync");
             if (auto *tile = findVisualObject(engine.rootObjects().first(), "keyTile_CapsLock")) tile->setProperty("showComparison", true);
         }
+        if (screenshotView == "second-layer") {
+            studio.selectLayer(1); studio.selectKey(1);
+            if (auto *panel = engine.rootObjects().first()->findChild<QObject *>("editorPanel")) QMetaObject::invokeMethod(panel, "sync");
+        }
         if (screenshotView == "config") {
             if (auto *dialog = engine.rootObjects().first()->findChild<QObject *>("configDialog"))
                 QMetaObject::invokeMethod(dialog, "open");

@@ -26,6 +26,7 @@ Column {
         initial = signature()
     }
     function apply() {
+        if (document.layerEditable === false) return
         if (mode === "tap-hold") {
             applyRequested({op:"pluginSetTapHold",head:(document.details || {}).head || "tap-hold",repeatMs:Number(repeatTime.text),holdMs:Number(holdTime.text),tap:tap.text,hold:hold.text})
         } else applyRequested({op:"pluginSetAction",expression:action.text})
@@ -39,6 +40,15 @@ Column {
         font.family: Commons.Style.font.family
         font.pixelSize: Commons.Style.font.subtitle
         font.bold: true
+    }
+    Text {
+        width: parent.width
+        visible: root.document.layerEditable === false
+        text: "Ebenen aus deflayermap sind hier nur lesbar. Bearbeiten im Studio unter „Konfiguration“."
+        color: Commons.Color.muted
+        font.family: Commons.Style.font.family
+        font.pixelSize: Commons.Style.font.caption
+        wrapMode: Text.WordWrap
     }
     Flow {
         width: parent.width
@@ -92,7 +102,7 @@ Column {
     }
     Row {
         spacing: Commons.Style.space(8)
-        Button { objectName:"kanataApplyEdit";text:"Im Entwurf übernehmen";foreground:Commons.Color.popups.text;bordered:true;enabled:root.pending && !root.busy;onClicked:root.apply() }
+        Button { objectName:"kanataApplyEdit";text:"Im Entwurf übernehmen";foreground:Commons.Color.popups.text;bordered:true;enabled:root.pending && !root.busy && root.document.layerEditable !== false;onClicked:root.apply() }
         Button { text:"Eingabe zurücksetzen";foreground:Commons.Color.popups.text;bordered:true;enabled:root.pending && !root.busy;onClicked:root.sync() }
     }
 }

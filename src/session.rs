@@ -119,8 +119,10 @@ impl Session {
         } else {
             &self.layout
         };
-        let layer = config.layer(self.layer)?;
-        let nodes = &layer.children[2..];
+        let keys = config.forms[config.src].children.len() - 1;
+        let nodes = (0..keys)
+            .map(|key| config.action(self.layer, key))
+            .collect::<Result<Vec<_>, _>>()?;
         let config_forms: Vec<Value> = config
             .forms
             .iter()
@@ -132,7 +134,7 @@ impl Session {
             .collect();
         let details = self
             .key
-            .map(|key| actions::details(&self.source, &nodes[key]))
+            .map(|key| actions::details(&self.source, nodes[key]))
             .unwrap_or(if self.physical_key.is_some() {
                 json!({"kind":"simple", "value":"_"})
             } else {
@@ -161,7 +163,8 @@ impl Session {
             json!({"selectedPhysicalKey":self.physical_key.as_deref().unwrap_or(""), "keyStates":states, "selectedKeyState":selected_state, "selectedLayer":self.layer,"selectedKey":self.key.map(|k|k as i64).unwrap_or(-1),
             "keys":config.forms[config.src].children[1..].iter().map(|n|n.value.as_str()).collect::<Vec<_>>(),
             "keyNames":config.forms[config.src].children[1..].iter().map(|n|(n.value.as_str(),environment::key_label(&n.value,layout))).collect::<std::collections::BTreeMap<_,_>>(),
-            "layers":config.layers.iter().map(|&i|config.forms[i].children[1].value.as_str()).collect::<Vec<_>>(),
+            "layers":(0..config.layers.len()).map(|i|config.layer_name(i).map(|n|n.value.as_str())).collect::<Result<Vec<_>,_>>()?,
+            "layerEditable":!config.is_map(self.layer),
             "actions":nodes.iter().map(|n|n.raw(&self.source)).collect::<Vec<_>>(),
             "labels":nodes.iter().map(|n|summary(n,layout)).collect::<Vec<_>>(),
             "details":details,"configForms":config_forms,"parses":self.parses}),
@@ -266,7 +269,7 @@ fn key_state(config: &Config, layer: usize, key: usize, layout: &str) -> Value {
     if action.value == "_" && layer > 0 {
         let base = config.action(0, key).unwrap();
         if !normal(base) {
-            let base_name = &config.layer(0).unwrap().children[1].value;
+            let base_name = &config.layer_name(0).unwrap().value;
             return json!({"kind":"inherited", "label":"Von Basis übernommen", "output":summary(base, layout), "lines":action_lines(base, layout), "detail":format!("Durchlassen: übernimmt bei aktiver Basis „{base_name}“ deren Belegung. Bei einer anderen aktiven Basis gilt deren Belegung."), "baseLayer":base_name});
         }
     }
@@ -298,14 +301,12 @@ fn compare_key(
     layout: &str,
 ) {
     let input = &config.forms[config.src].children[key + 1].value;
-    let name = &config.layer(layer).unwrap().children[1].value;
+    let name = &config.layer_name(layer).unwrap().value;
     let old_key = baseline.forms[baseline.src].children[1..]
         .iter()
         .position(|n| crate::editor::normalized(&n.value) == crate::editor::normalized(input));
-    let old_layer = baseline
-        .layers
-        .iter()
-        .position(|&i| baseline.forms[i].children[1].value == *name);
+    let old_layer = (0..baseline.layers.len())
+        .position(|i| baseline.layer_name(i).is_ok_and(|n| n.value == *name));
     let action = config.action(layer, key).unwrap();
     let mut before = json!({"kind":"normal", "label":"Normale Funktion", "output":environment::key_label(input, layout), "expression":"_"});
     let mut inherited_change = false;

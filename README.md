@@ -233,6 +233,12 @@ direct references. Layers with remaining direct references cannot be deleted.
 Indirect references through variables or aliases still require final validation
 with Kanata.
 
+Layers defined with `deflayermap` are shown in file order alongside `deflayer`
+layers. Explicit mappings take precedence over `_`/`___`; unmapped keys are
+transparent, as in Kanata. The key editor shows these layers read-only; edit them
+as text under "Configuration". They can be renamed and deleted, and new physical
+keys do not add entries to them.
+
 ## Saving and test mode
 
 Validation uses a temporary file in the configuration directory and limits the

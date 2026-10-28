@@ -746,6 +746,12 @@ Rectangle {
                 color: root.mutedColor; font.pixelSize: 11; wrapMode: Text.WordWrap
             }
             Rectangle { Layout.fillWidth: true; height: 1; color: Qt.alpha(root.foregroundColor, 0.12) }
+            Text {
+                Layout.fillWidth: true
+                visible: !backend.layerEditable
+                text: root.tr("Ebenen aus deflayermap sind hier nur lesbar. Bearbeiten unter „Konfiguration“.")
+                color: root.accentColor; font.pixelSize: 11; wrapMode: Text.WordWrap
+            }
 
             RowLayout {
                 Layout.fillWidth: true
@@ -769,7 +775,8 @@ Rectangle {
                 Layout.fillWidth: true
                 visible: root.view === 0
                 spacing: 10
-                enabled: backend.selectedPhysicalKey.length > 0
+                enabled: backend.layerEditable && backend.selectedPhysicalKey.length > 0
+                opacity: backend.layerEditable ? 1 : 0.45
                 Rectangle {
                     Layout.fillWidth: true
                     implicitHeight: outputSummary.implicitHeight + 24
@@ -829,6 +836,8 @@ Rectangle {
             ColumnLayout {
                 Layout.fillWidth: true
                 visible: root.view === 1
+                enabled: backend.layerEditable
+                opacity: backend.layerEditable ? 1 : 0.45
                 spacing: 8
                 Text { text: root.tr(backend.actionDetails.wrapped ? "Eingebettetes Tap Hold: die umgebende Aktion bleibt erhalten." : "Tipp- und Halteaktion getrennt bearbeiten."); color: root.mutedColor; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 Caption { text: root.tr("BEIM TIPPEN"); Layout.topMargin: 6 }
@@ -893,6 +902,8 @@ Rectangle {
             ColumnLayout {
                 Layout.fillWidth: true
                 visible: root.view === 2
+                enabled: backend.layerEditable
+                opacity: backend.layerEditable ? 1 : 0.45
                 spacing: 8
                 Text { text: root.tr("Schritte laufen von oben nach unten. Eine Zahl ist eine Pause in Millisekunden."); color: root.mutedColor; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 PanelButton {
