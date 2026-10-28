@@ -50,13 +50,15 @@ impl PluginEditor {
     fn load(&mut self, input: &Value, discard: bool) -> Result<(), String> {
         let path = protocol::config_path(input)?;
         if !discard && self.path.as_ref() == Some(&path) && self.source != self.original {
+            self.layout = input.get("layoutInfo").cloned().unwrap_or_else(|| {
+                crate::environment::discover_for_config(Some(&self.original))["layout"].clone()
+            });
             return Ok(());
         }
         let original = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let layout = input
-            .get("layoutInfo")
-            .cloned()
-            .unwrap_or_else(|| crate::environment::discover()["layout"].clone());
+        let layout = input.get("layoutInfo").cloned().unwrap_or_else(|| {
+            crate::environment::discover_for_config(Some(&original))["layout"].clone()
+        });
         let directory = input["stateDirectory"]
             .as_str()
             .map(PathBuf::from)
@@ -87,7 +89,7 @@ impl PluginEditor {
             }
         }
         let mut editor = Editor::default();
-        editor.session.layout = layout["id"].as_str().unwrap_or("de").into();
+        editor.session.layout = crate::environment::display_layout(&layout).into();
         editor.session.sync(&source, true)?;
         editor.session.set_baseline(&original)?;
         self.editor = editor;
@@ -106,6 +108,16 @@ impl PluginEditor {
         match input["op"].as_str().unwrap_or("") {
             "pluginOpen" => self.load(input, false)?,
             "pluginDiscard" => self.load(input, true)?,
+            "pluginEnvironment" => {
+                if self.path.is_none() {
+                    return Err("Keine Konfiguration geöffnet".into());
+                }
+                self.layout = input.get("layoutInfo").cloned().unwrap_or_else(|| {
+                    crate::environment::discover_for_config(Some(&self.original))["layout"].clone()
+                });
+                self.editor.session.layout =
+                    crate::environment::display_layout(&self.layout).into();
+            }
             "pluginSave" => {
                 let path = self.path.as_ref().ok_or("Keine Konfiguration geöffnet")?;
                 if self.source == self.original {
@@ -150,7 +162,8 @@ impl PluginEditor {
                 runtime::save(path, self.original.as_bytes(), self.source.as_bytes())?;
                 self.original = self.source.clone();
                 self.editor = Editor::default();
-                self.editor.session.layout = self.layout["id"].as_str().unwrap_or("de").into();
+                self.editor.session.layout =
+                    crate::environment::display_layout(&self.layout).into();
                 self.editor.session.sync(&self.source, true)?;
                 // A leftover draft with source == disk is recognized as already saved.
                 self.persist()?;

@@ -1,4 +1,5 @@
 import QtQuick
+import "KeyboardModel.js" as Keyboard
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
@@ -83,44 +84,13 @@ ApplicationWindow {
     property color red: studio.theme.red
     property bool pendingEdit: editorPanel.pendingEdit
     property bool forceClose: false
-    function buildKeyRows(includeThinkPad) {
-        var rows = [
-        [["Escape", "Esc", 1], ["F1", "F1", 1], ["F2", "F2", 1], ["F3", "F3", 1], ["F4", "F4", 1], ["F5", "F5", 1], ["F6", "F6", 1], ["F7", "F7", 1], ["F8", "F8", 1], ["F9", "F9", 1], ["F10", "F10", 1], ["F11", "F11", 1], ["F12", "F12", 1]],
-        [["Backquote", "^", 1], ["1", "1", 1], ["2", "2", 1], ["3", "3", 1], ["4", "4", 1], ["5", "5", 1], ["6", "6", 1], ["7", "7", 1], ["8", "8", 1], ["9", "9", 1], ["0", "0", 1], ["Minus", "ß", 1], ["Equal", "´", 1], ["Backspace", "⌫", 1.7]],
-        [["Tab", "Tab", 1.4], ["q", "Q", 1], ["w", "W", 1], ["e", "E", 1], ["r", "R", 1], ["t", "T", 1], ["y", "Z", 1], ["u", "U", 1], ["i", "I", 1], ["o", "O", 1], ["p", "P", 1], ["BracketLeft", "Ü", 1], ["BracketRight", "+", 1], ["Enter", "Eingabe", 1.5]],
-        [["CapsLock", "Caps", 1.7], ["a", "A", 1], ["s", "S", 1], ["d", "D", 1], ["f", "F", 1], ["g", "G", 1], ["h", "H", 1], ["j", "J", 1], ["k", "K", 1], ["l", "L", 1], ["Semicolon", "Ö", 1], ["Quote", "Ä", 1], ["Backslash", "#", 1]],
-        [["ShiftLeft", "Shift", 1.45], ["IntlBackslash", "<", 1], ["z", "Y", 1], ["x", "X", 1], ["c", "C", 1], ["v", "V", 1], ["b", "B", 1], ["n", "N", 1], ["m", "M", 1], ["Comma", ",", 1], ["Period", ".", 1], ["Slash", "-", 1], ["ShiftRight", "Shift", 2.2]],
-        [["ControlLeft", "Strg", 1.35], ["MetaLeft", "Super", 1.35], ["AltLeft", "Alt", 1.35], ["Space", "Leertaste", 5.6], ["AltRight", "AltGr", 1.35], ["MetaRight", "Super", 1.35], ["ControlRight", "Strg", 1.35]]
-        ]
-        var info = studio.layoutInfo || {}
-        var choice = info.choice || "auto"
-        var layout = ["de", "us", "gb"].indexOf(choice) >= 0 ? choice : (info.id || "de")
-        var geometry = choice === "auto" ? (info.geometry || "iso") : choice === "us" ? "ansi" : "iso"
-        var labels = layout === "us" ? {"Backquote":"`", "Minus":"-", "Equal":"=", "y":"Y", "z":"Z", "BracketLeft":"[", "BracketRight":"]", "Semicolon":";", "Quote":"'", "Backslash":"\\", "IntlBackslash":"\\", "Slash":"/", "ControlLeft":"Ctrl", "ControlRight":"Ctrl", "AltRight":"Alt"}
-            : layout === "gb" ? {"Backquote":"`", "Minus":"-", "Equal":"=", "y":"Y", "z":"Z", "BracketLeft":"[", "BracketRight":"]", "Semicolon":";", "Quote":"'", "Backslash":"#", "IntlBackslash":"\\", "Slash":"/", "ControlLeft":"Ctrl", "ControlRight":"Ctrl"}
-            : {"Backquote":"^", "Minus":"ß", "Equal":"´", "y":"Z", "z":"Y", "BracketLeft":"Ü", "BracketRight":"+", "Semicolon":"Ö", "Quote":"Ä", "Backslash":"#", "IntlBackslash":"<", "Slash":"-", "ControlLeft":"Strg", "ControlRight":"Strg"}
-        for (var r = 0; r < rows.length; ++r)
-            for (var k = 0; k < rows[r].length; ++k)
-                if (labels[rows[r][k][0]] !== undefined) rows[r][k][1] = labels[rows[r][k][0]]
-        if (geometry === "ansi") {
-            rows[2].splice(rows[2].length - 1, 0, ["Backslash", layout === "de" ? "\\" : "\\", 1])
-            rows[2][rows[2].length - 1][2] = 1.75
-            rows[3] = rows[3].filter(function(key) { return key[0] !== "Backslash" })
-            rows[4] = rows[4].filter(function(key) { return key[0] !== "IntlBackslash" })
-            rows[4][0][2] = 2.4
-        }
-        if (includeThinkPad && (choice !== "auto" || (info.keyboard && info.keyboard.type === "built-in"))) {
-            rows[0].push(["Home", "Pos1", 1], ["End", "Ende", 1], ["Insert", "Einfg", 1], ["Delete", "Entf", 1])
-            rows[5] = [["fn", "Fn", 1], ["ControlLeft", layout === "us" ? "Ctrl" : "Strg", 1.25], ["MetaLeft", "Super", 1], ["AltLeft", "Alt", 1.1], ["Space", "Leertaste", 5.8], ["AltRight", layout === "us" ? "Alt" : "AltGr", 1.15], ["PrintScreen", "Druck", 1], ["ControlRight", layout === "us" ? "Ctrl" : "Strg", 1.1], ["PageUp", "Bild↑", 1], ["ArrowUp", "↑", 1], ["PageDown", "Bild↓", 1]]
-            rows.push([["ArrowLeft", "←", 1], ["ArrowDown", "↓", 1], ["ArrowRight", "→", 1]])
-        }
-        return rows
-    }
-    property var keyRows: buildKeyRows(true)
+    function buildKeyRows(includeThinkPad) { return Keyboard.baseRows(studio.layoutInfo || {}, includeThinkPad) }
+    function effectiveDisplayLayout() { return Keyboard.displayLayout(studio.layoutInfo || {}) }
+    readonly property bool usesFullSizeGeometry: Keyboard.isFullSize(studio.layoutInfo || {})
+    readonly property bool usesLaptopGeometry: Keyboard.isLaptop(studio.layoutInfo || {})
+    property var keyRows: Keyboard.buildRows(studio.layoutInfo || {})
     property var outputKeyRows: buildKeyRows(false)
-    property var layoutChoices: ["auto", "thinkpad", "de", "us", "gb"]
-    readonly property bool usesLaptopGeometry: (studio.layoutInfo.choice || "auto") !== "auto"
-        || (studio.layoutInfo.keyboard && studio.layoutInfo.keyboard.type === "built-in")
+    property var layoutChoices: ["auto", "thinkpad", "fullsize", "tkl", "de", "us", "gb"]
 
     function keyIndex(name) {
         var lower = String(name).toLowerCase()
@@ -643,7 +613,7 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             Layout.preferredHeight: 36
                             font.pixelSize: 12
-                            model: ["Automatisch", "ThinkPad-Laptop", "Deutsch (ISO)", "Englisch (US, ANSI)", "Englisch (UK, ISO)"].map(function(item) { return window.tr(item) })
+                            model: ["Automatisch", "ThinkPad-Laptop", "100%-Tastatur", "Ohne Nummernblock (TKL)", "Deutsch (ISO)", "Englisch (US, ANSI)", "Englisch (UK, ISO)"].map(function(item) { return window.tr(item) })
                             currentIndex: Math.max(0, window.layoutChoices.indexOf(studio.layoutInfo.choice || "auto"))
                             onActivated: studio.setLayoutChoice(window.layoutChoices[currentIndex])
                             palette.text: window.fg
@@ -696,18 +666,37 @@ ApplicationWindow {
                             text: {
                                 var info = studio.layoutInfo
                                 var id = ["de", "us", "gb"].indexOf(info.choice) >= 0 ? info.choice : (info.id || "de")
-                                var geometry = info.choice === "auto" ? (info.geometry || "iso") : info.choice === "us" ? "ansi" : "iso"
+                                var geometry = Keyboard.displayGeometry(info)
                                 var names = {de:window.tr("Deutsch"), us:window.tr("Englisch US"), gb:window.tr("Englisch UK")}
                                 var device = info.keyboard ? (info.keyboard.type === "built-in" ? window.tr("Integrierte Tastatur") : window.tr("Externe Tastatur")) : (info.source || window.tr("Tastatur"))
-                                return device + " · " + names[id] + " · " + geometry.toUpperCase()
+                                return (info.keyboard && info.keyboard.name ? info.keyboard.name : device) + " · " + names[id] + " · " + geometry.toUpperCase() + (window.usesFullSizeGeometry ? " · 100%" : "")
                             }
                             color: window.muted; font.pixelSize: 10; horizontalAlignment: Text.AlignRight; elide: Text.ElideRight
+                        }
+                    }
+                    Text {
+                        objectName: "deviceStatus"
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 28
+                        Layout.rightMargin: 28
+                        color: window.muted
+                        font.pixelSize: 11
+                        wrapMode: Text.WordWrap
+                        text: {
+                            var info = studio.layoutInfo || {}
+                            var devices = info.devices || []
+                            var lines = devices.map(function(d) {
+                                return d.name + " · " + (d.captured === true ? "Kanata" : d.captured === false ? "Ausgenommen" : "Gerätepfad prüfen") + (d.firmware ? " · eigene Firmware" : "")
+                            })
+                            if (info.available === false) lines.unshift("Keine von Kanata bearbeitete Tastatur angeschlossen.")
+                            return lines.join("\n")
                         }
                     }
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.leftMargin: 28
                         Layout.rightMargin: 28
+                        visible: studio.layoutInfo.available !== false
                         Layout.preferredHeight: keyboardColumn.implicitHeight + 42
                         radius: 7
                         color: window.surface
@@ -725,10 +714,10 @@ ApplicationWindow {
                             for (var r = 0; r < window.keyRows.length; ++r) {
                                 var units = 0
                                 for (var k = 0; k < window.keyRows[r].length; ++k) units += window.keyRows[r][k][2]
-                                var gaps = Math.max(0, window.keyRows[r].length - 1) * 5
+                                var gaps = -5
                                 if (window.usesLaptopGeometry && r === 0) gaps += 28
-                                if (window.usesLaptopGeometry && r === 3) units += 1.5
-                                unit = Math.min(unit, (available - gaps) / units)
+                                if (window.usesLaptopGeometry && Keyboard.isIsoEnter(studio.layoutInfo || {}) && r === 3) units += 1.5
+                                unit = Math.min(unit, (available - gaps) / units - 5)
                             }
                             return Math.max(14, unit)
                         }
@@ -750,7 +739,7 @@ ApplicationWindow {
                                 property bool laptopStretch: window.usesLaptopGeometry && [1, 2, 3, 4, 5].indexOf(index) >= 0
                                 property real baseWidth: modelData.reduce(function(total, key) { return total + keyboardColumn.keyUnitWidth * key[2] + 5 * (key[2] - 1) }, 0) + Math.max(0, modelData.length - 1) * spacing
                                 property real bottomArrowWidth: keyboardColumn.keyUnitWidth + keyboardColumn.laptopBottomExtra
-                                property real targetWidth: index === 3 && window.usesLaptopGeometry ? width - keyboardColumn.keyUnitWidth * 1.5 - 12 : width
+                                property real targetWidth: index === 3 && window.usesLaptopGeometry && Keyboard.isIsoEnter(studio.layoutInfo || {}) ? width - keyboardColumn.keyUnitWidth * 1.5 - 12 : width
                                 property real extraPerKey: laptopStretch ? Math.max(0, (targetWidth - baseWidth) / modelData.length) : 0
                                 height: arrowRow ? 32 : window.usesLaptopGeometry && index === 0 ? 41 : window.usesLaptopGeometry && index === 5 ? 29 : 53
                                 spacing: 5
@@ -767,7 +756,8 @@ ApplicationWindow {
                                         required property var modelData
                                         required property int index
                                         property real functionGroupGap: window.usesLaptopGeometry && parent.index === 0 && [1, 5, 9, 13].indexOf(index) >= 0 ? 7 : 0
-                                        property bool isoEnterKey: window.usesLaptopGeometry && modelData[0] === "Enter"
+                                        property bool isoEnterKey: Keyboard.isIsoEnter(studio.layoutInfo || {}) && modelData[0] === "Enter"
+                                        property bool spacer: modelData[0] === ""
                                         property bool laptopArrowKey: window.usesLaptopGeometry && ["PageUp", "ArrowUp", "PageDown"].indexOf(modelData[0]) >= 0
                                         property int keyNumber: window.keyIndex(modelData[0])
                                             property bool configured: keyNumber >= 0
@@ -778,11 +768,11 @@ ApplicationWindow {
                                             property var actionLines: keyState.lines || []
                                             property bool chosen: configured ? keyNumber === studio.selectedKey : String(modelData[0]).toLowerCase() === studio.selectedPhysicalKey.toLowerCase()
                                         width: parent.arrowRow ? parent.bottomArrowWidth : modelData[2] * keyboardColumn.keyUnitWidth + 5 * (modelData[2] - 1) + parent.extraPerKey + functionGroupGap
-                                        height: isoEnterKey ? 113 : window.usesLaptopGeometry && parent.index === 0 ? 38 : laptopArrowKey ? 32 : window.usesLaptopGeometry && parent.index === 5 ? 53 : parent.height
+                                        height: modelData[3] === 2 ? 113 : isoEnterKey ? 113 : window.usesLaptopGeometry && parent.index === 0 ? 38 : laptopArrowKey ? 32 : window.usesLaptopGeometry && parent.index === 5 ? 53 : parent.height
                                         radius: 5
                                         color: isoEnterKey ? "transparent" : chosen ? Qt.alpha(window.accent, 0.16) : draftChanged ? Qt.alpha(window.changeColor, 0.10) : keyState.kind === "own" ? Qt.alpha(window.accent, 0.08) : Qt.alpha(window.fg, 0.045)
                                         border.color: isoEnterKey ? "transparent" : chosen ? window.accent : draftChanged ? window.changeColor : keyState.kind === "own" ? Qt.alpha(window.accent, 0.55) : Qt.alpha(window.fg, 0.3)
-                                        opacity: unavailableFn ? 0.58 : 1
+                                        opacity: spacer ? 0 : unavailableFn ? 0.58 : 1
                                         y: isoEnterKey ? 0 : 0
                                         Shape {
                                             id: enterShape
@@ -859,7 +849,7 @@ ApplicationWindow {
                                                 anchors.fill: parent
                                                 hoverEnabled: true
                                                 onClicked: {
-                                                    if (parent.unavailableFn) return
+                                                    if (parent.unavailableFn || parent.spacer) return
                                                     if (parent.configured) window.chooseKey(parent.keyNumber)
                                                     else window.choosePhysicalKey(parent.modelData[0])
                                                 }

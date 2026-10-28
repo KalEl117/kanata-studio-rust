@@ -14,7 +14,9 @@ use std::ffi::{CStr, CString, c_char};
 pub fn dispatch(editor: &mut Editor, input: &str) -> Result<serde_json::Value, String> {
     let value: serde_json::Value = serde_json::from_str(input).map_err(|e| e.to_string())?;
     match value["op"].as_str() {
-        Some("environment") => return Ok(environment::discover()),
+        Some("environment") => {
+            return Ok(environment::discover_for_config(value["config"].as_str()));
+        }
         Some("layoutChoice") => {
             environment::save_choice(value["choice"].as_str().ok_or("Layout-Auswahl fehlt")?)?;
             return Ok(json!({"ok":true}));

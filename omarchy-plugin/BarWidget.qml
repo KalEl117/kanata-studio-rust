@@ -2,7 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.Ui
-import qs.Commons
+import qs.Commons as Commons
 
 BarWidget {
     id: root
@@ -54,7 +54,7 @@ BarWidget {
     function perform(payload) {
         if (!backend.ready || overviewLoading) return
         overviewLoading = true
-        if (payload.op === "pluginOpen" || payload.op === "pluginDiscard") {
+        if (payload.op === "pluginOpen" || payload.op === "pluginDiscard" || payload.op === "pluginEnvironment") {
             payload.stateDirectory = setting("draftDirectory", undefined)
             payload.layoutInfo = setting("layoutInfo", undefined)
         }
@@ -101,7 +101,7 @@ BarWidget {
         bar: root.bar
         text: "󰌌"
         active: root.opened
-        activeColor: Color.accent
+        activeColor: Commons.Color.accent
         dimmed: root.serviceState !== "active"
         tooltipText: (root.feedback ? root.feedback + "\n" : "") + root.statusText
             + "\nLinksklick: Status-Popup · Rechtsklick: Aktualisieren"
@@ -118,7 +118,7 @@ BarWidget {
         bar: root.bar
         owner: root
         open: root.opened
-        contentWidth: fittedContentWidth(Style.space(root.editVisible ? 1120 : 880))
+        contentWidth: fittedContentWidth(Commons.Style.space(root.editVisible ? 1120 : 880))
         contentHeight: fittedContentHeight(content.implicitHeight)
 
         Flickable {
@@ -130,34 +130,34 @@ BarWidget {
         Column {
             id: content
             width: parent.width
-            spacing: Style.space(12)
+            spacing: Commons.Style.space(12)
             Keys.onEscapePressed: root.close()
 
             Text {
                 text: "Kanata Studio"
-                color: Color.popups.text
-                font.family: Style.font.family
-                font.pixelSize: Style.font.subtitle
+                color: Commons.Color.popups.text
+                font.family: Commons.Style.font.family
+                font.pixelSize: Commons.Style.font.subtitle
                 font.bold: true
             }
-            PanelSeparator { width: parent.width; foreground: Color.popups.text }
+            PanelSeparator { width: parent.width; foreground: Commons.Color.popups.text }
             Text {
                 objectName: "kanataServiceStatus"
                 width: parent.width
                 textFormat: Text.PlainText
                 text: root.statusText
-                color: Color.popups.text
-                font.family: Style.font.family
-                font.pixelSize: Style.font.body
+                color: Commons.Color.popups.text
+                font.family: Commons.Style.font.family
+                font.pixelSize: Commons.Style.font.body
                 wrapMode: Text.WordWrap
             }
             Text {
                 width: parent.width
                 textFormat: Text.PlainText
                 text: "Studio-Backend: " + root.backendStatus
-                color: backend.ready ? Color.popups.text : Color.muted
-                font.family: Style.font.family
-                font.pixelSize: Style.font.body
+                color: backend.ready ? Commons.Color.popups.text : Commons.Color.muted
+                font.family: Commons.Style.font.family
+                font.pixelSize: Commons.Style.font.body
                 wrapMode: Text.WordWrap
             }
             Text {
@@ -165,9 +165,9 @@ BarWidget {
                 visible: backend.error !== ""
                 textFormat: Text.PlainText
                 text: backend.error
-                color: Color.urgent
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
+                color: Commons.Color.urgent
+                font.family: Commons.Style.font.family
+                font.pixelSize: Commons.Style.font.caption
                 wrapMode: Text.WordWrap
             }
             Text {
@@ -175,18 +175,34 @@ BarWidget {
                 visible: root.feedback !== ""
                 textFormat: Text.PlainText
                 text: root.feedback
-                color: Color.muted
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
+                color: Commons.Color.muted
+                font.family: Commons.Style.font.family
+                font.pixelSize: Commons.Style.font.caption
                 wrapMode: Text.WordWrap
             }
-            PanelSeparator { width: parent.width; foreground: Color.popups.text }
+            PanelSeparator { width: parent.width; foreground: Commons.Color.popups.text }
+            Text {
+                width: parent.width
+                textFormat: Text.PlainText
+                text: {
+                    var info = root.overview.layoutInfo || {}
+                    var lines = (info.devices || []).map(function(d) {
+                        return d.name + " · " + (d.captured === true ? "Kanata" : d.captured === false ? "Ausgenommen" : "Gerätepfad prüfen") + (d.firmware ? " · eigene Firmware" : "")
+                    })
+                    if (info.available === false) lines.unshift("Keine von Kanata bearbeitete Tastatur angeschlossen.")
+                    return lines.join("\n")
+                }
+                color: Commons.Color.muted
+                font.family: Commons.Style.font.family
+                font.pixelSize: Commons.Style.font.caption
+                wrapMode: Text.WordWrap
+            }
             Text {
                 width: parent.width
                 text: root.document.dirty ? "Ungespeicherter Entwurf · geänderte Tasten sind gold markiert" : "Gespeicherte Belegung · Taste anklicken zum Bearbeiten"
-                color: Color.muted
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
+                color: Commons.Color.muted
+                font.family: Commons.Style.font.family
+                font.pixelSize: Commons.Style.font.caption
                 wrapMode: Text.WordWrap
             }
             Text {
@@ -194,14 +210,14 @@ BarWidget {
                 visible: root.overviewLoading || root.overviewError !== ""
                 textFormat: Text.PlainText
                 text: root.overviewError || "Belegung wird geladen …"
-                color: root.overviewError ? Color.urgent : Color.muted
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
+                color: root.overviewError ? Commons.Color.urgent : Commons.Color.muted
+                font.family: Commons.Style.font.family
+                font.pixelSize: Commons.Style.font.caption
                 wrapMode: Text.WordWrap
             }
             Flow {
                 width: parent.width
-                spacing: Style.space(6)
+                spacing: Commons.Style.space(6)
                 Repeater {
                     objectName: "kanataLayerChoices"
                     model: root.overview.views ? root.overview.views[0].layers : []
@@ -212,7 +228,7 @@ BarWidget {
                         text: modelData
                         selected: root.previewLayer === index
                         enabled: !root.overviewLoading && (!root.editVisible || !keyEditor.pending)
-                        foreground: Color.popups.text
+                        foreground: Commons.Color.popups.text
                         bordered: true
                         focusable: true
                         onClicked: root.chooseLayer(index)
@@ -221,7 +237,7 @@ BarWidget {
             }
             Row {
                 width: parent.width
-                spacing: Style.space(14)
+                spacing: Commons.Style.space(14)
                 visible: root.overview.views !== undefined
                 MiniKeyboard {
                     width: root.editVisible ? (parent.width-parent.spacing)*0.64 : parent.width
@@ -241,18 +257,18 @@ BarWidget {
             }
             Flow {
                 width: parent.width
-                spacing: Style.space(8)
-                Button { text:"Rückgängig";foreground:Color.popups.text;bordered:true;enabled:!!root.document.canUndo && !root.overviewLoading && !keyEditor.pending;onClicked:root.perform({op:"pluginUndo"}) }
-                Button { text:"Wiederherstellen";foreground:Color.popups.text;bordered:true;enabled:!!root.document.canRedo && !root.overviewLoading && !keyEditor.pending;onClicked:root.perform({op:"pluginRedo"}) }
-                Button { objectName:"kanataSaveDraft";text:"Speichern";foreground:Color.popups.text;bordered:true;enabled:!!root.document.dirty && !root.overviewLoading && !keyEditor.pending;onClicked:root.perform({op:"pluginSave"}) }
-                Button { text:"Verwerfen";foreground:Color.popups.text;bordered:true;enabled:!root.overviewLoading;onClicked:root.perform({op:"pluginDiscard",path:root.setting("configPath", "")}) }
-                Button { text:"Bearbeitung schließen";visible:root.editVisible;foreground:Color.popups.text;bordered:true;enabled:!keyEditor.pending;onClicked:root.editVisible=false }
+                spacing: Commons.Style.space(8)
+                Button { text:"Rückgängig";foreground:Commons.Color.popups.text;bordered:true;enabled:!!root.document.canUndo && !root.overviewLoading && !keyEditor.pending;onClicked:root.perform({op:"pluginUndo"}) }
+                Button { text:"Wiederherstellen";foreground:Commons.Color.popups.text;bordered:true;enabled:!!root.document.canRedo && !root.overviewLoading && !keyEditor.pending;onClicked:root.perform({op:"pluginRedo"}) }
+                Button { objectName:"kanataSaveDraft";text:"Speichern";foreground:Commons.Color.popups.text;bordered:true;enabled:!!root.document.dirty && !root.overviewLoading && !keyEditor.pending;onClicked:root.perform({op:"pluginSave"}) }
+                Button { text:"Verwerfen";foreground:Commons.Color.popups.text;bordered:true;enabled:!root.overviewLoading;onClicked:root.perform({op:"pluginDiscard",path:root.setting("configPath", "")}) }
+                Button { text:"Bearbeitung schließen";visible:root.editVisible;foreground:Commons.Color.popups.text;bordered:true;enabled:!keyEditor.pending;onClicked:root.editVisible=false }
             }
             Button {
                 objectName: "kanataRefreshButton"
                 width: parent.width
                 text: root.manualRefresh ? "Aktualisiert …" : "Aktualisieren"
-                foreground: Color.popups.text
+                foreground: Commons.Color.popups.text
                 bordered: true
                 focusable: true
                 enabled: !root.manualRefresh
@@ -262,7 +278,7 @@ BarWidget {
                 objectName: "kanataStudioLaunchButton"
                 width: parent.width
                 text: "Studio öffnen"
-                foreground: Color.popups.text
+                foreground: Commons.Color.popups.text
                 bordered: true
                 focusable: true
                 onClicked: root.launchStudio()
@@ -302,6 +318,12 @@ BarWidget {
             statusProcess.running = false
         }
     }
-    Timer { interval: 5000; running: true; repeat: true; onTriggered: root.refresh() }
+    Timer {
+        interval: 5000; running: true; repeat: true
+        onTriggered: {
+            root.refresh()
+            if (root.opened && root.document.overview && !root.overviewLoading && (!root.editVisible || !keyEditor.pending)) root.perform({op:"pluginEnvironment"})
+        }
+    }
     Component.onCompleted: refresh()
 }

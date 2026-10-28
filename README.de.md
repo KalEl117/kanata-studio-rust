@@ -153,7 +153,23 @@ Die Ausgabeauswahl verwendet gültige, groß-/kleinschreibungsabhängige Kanata-
 
 Rust verwaltet die ausgewählte Taste und Ebene. Das geparste Dokument bleibt bei Auswahländerungen im Speicher. Die Oberfläche liest vorbereitete Aktionen, Beschriftungen und Aktionsdetails; mehrere Zugriffe auf dieselben Felder lösen kein erneutes Parsen aus. Dokument, Auswahl, Aktionen, Farben, Status und Countdown haben getrennte Änderungssignale. Die Tastaturansicht wird dadurch bei einem Statuswechsel oder Countdown-Schritt nicht neu aufgebaut.
 
-Die regelmäßige Layout-/Geräte-/Theme-Abfrage läuft außerhalb des GUI-Threads. Die erste Erkennung erfolgt vor dem Öffnen des Fensters. Deutsch, Englisch US, Englisch UK, ThinkPad sowie automatische Erkennung bleiben verfügbar. Die Layout-Auswahl wird unter `~/.config/kanata-studio-rust/settings.json` gespeichert; eine vorhandene Auswahl aus dem ersten Qt/Rust-Prototyp wird übernommen. Die Sprach- und Panel-Einstellungen der Oberfläche bleiben in Qt.
+Die regelmäßige Layout-/Geräte-/Theme-Abfrage läuft außerhalb des GUI-Threads. Die erste Erkennung erfolgt vor dem Öffnen des Fensters. Die automatische Anzeige berücksichtigt die Gerätefilter der geöffneten Kanata-Konfiguration: unter den bearbeiteten Tastaturen wird USB vor anderen externen Tastaturen und dann vor der internen Tastatur bevorzugt. An- und Abstecken aktualisiert Hauptfenster und geöffnetes Omarchy-Popup, ohne Entwürfe oder die ausgewählte Ebene zu verlieren. Ausgenommene Geräte bleiben mit ihrem Status sichtbar. Sind nur ausgenommene Tastaturen angeschlossen, wird keine erfundene bearbeitbare Tastatur angezeigt.
+
+Beide Oberflächen verwenden dasselbe Layoutmodell (`ui/KeyboardModel.js`). ThinkPad, 100%-Tastatur und TKL sind auswählbar; Deutsch, Englisch US und Englisch UK bleiben als manuelle Anzeige verfügbar. ANSI-Enter liegt in der mittleren Buchstabenreihe, ISO-Enter belegt zwei Reihen, und Navigation/Nummernblock erscheinen auch im Popup. Die Sprachwahl macht eine externe Tastatur nicht mehr zur Laptop-Tastatur. Hyprlands normalisierte Gerätenamen und der aktive Sprachindex werden berücksichtigt. Die aufgedruckte Sprache, frei programmierte Firmware-Belegungen und die genaue Bauform unbekannter Tastaturen können nicht zuverlässig aus HID-Tastencodes ermittelt werden; bei abweichender Bauform die manuelle Auswahl verwenden. Bekannte Firmware-Namen wie Adv360 Pro werden nicht anhand ihrer möglichen Nummernblock-Ausgaben als 100%-Tastatur klassifiziert.
+
+Die Layout-Auswahl unter `~/.config/kanata-studio-rust/settings.json` ändert nur die Anzeige, nicht die Gerätefilter. Weitere Einstellungen in dieser Datei bleiben erhalten. Die Sprach- und Panel-Einstellungen der Oberfläche bleiben in Qt.
+
+### Gewöhnliche Tastaturen automatisch erfassen, Firmware-Tastatur ausnehmen
+
+Kanata selbst übernimmt das An- und Abstecken auch bei geschlossenem Studio. Für beispielsweise eine Advantage360 Pro lässt sich die feste Positivliste durch folgende Optionen in der bestehenden `defcfg` ersetzen (andere Optionen beibehalten):
+
+```lisp
+linux-device-detect-mode keyboard-only
+linux-continue-if-no-devs-found yes
+linux-dev-names-exclude ("Adv360 Pro Keyboard" "Adv360 Pro")
+```
+
+`linux-dev` und `linux-dev-names-include` müssen für diese automatische Auswahl entfernt werden. Kanata vergleicht vollständige Gerätenamen; weitere Firmware-Tastaturen müssen mit ihrem tatsächlichen Namen ergänzt werden. Es gibt kein allgemeines HID-Merkmal, das alle programmierbaren Tastaturen identifiziert. Die Erkennung bekannter Firmware-Namen im Studio ist ein Anzeigehinweis, keine selbstständige Änderung der aktiven Konfiguration. Die Optionen sind im [Kanata-Konfigurationshandbuch](https://github.com/jtroo/kanata/blob/v1.12.0/docs/config.adoc#linux-only-linux-dev-names-exclude) beschrieben. Nach Änderungen der Gerätefilter Kanata neu starten; ein Reload allein genügt nicht. `keyboard-only` nimmt kombinierte Maus-/Tastatur-Schnittstellen aus; falls eine echte Tastatur nur so eine Schnittstelle anbietet, ist eine ausdrückliche Geräteauswahl nötig.
 
 Kommentare und unberührte Dateibereiche bleiben erhalten. Beim Umbenennen werden direkte Ebenenverweise angepasst. Ebenen mit verbleibenden direkten Verweisen können nicht gelöscht werden. Indirekte Verweise über Variablen oder Alias-Konstruktionen benötigen die abschließende Kanata-Prüfung.
 
@@ -171,6 +187,7 @@ Nach einer Wiederherstellung beim App-Start lädt der Editor die wiederhergestel
 ~/.cargo/bin/cargo test --locked --offline
 ~/.cargo/bin/cargo clippy --locked --offline --all-targets -- -D warnings
 ~/.cargo/bin/cargo fmt --check
+node --test tests/keyboard-model.test.cjs
 QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= ./run.sh --self-test
 python3 tools/check-recovery.py
 python3 tools/check-package.py

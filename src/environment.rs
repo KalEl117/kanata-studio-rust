@@ -24,8 +24,13 @@ pub fn preset(value: &str) -> Option<&'static str> {
     }
 }
 
+pub fn display_layout(info: &Value) -> &str {
+    preset(info["choice"].as_str().unwrap_or(""))
+        .unwrap_or_else(|| info["id"].as_str().unwrap_or("de"))
+}
+
 fn excluded(name: &str) -> bool {
-    let name = name.to_lowercase();
+    let name = normalized_device_name(name);
     [
         "kanata",
         "virtual",
@@ -39,7 +44,35 @@ fn excluded(name: &str) -> bool {
         "pc speaker",
     ]
     .iter()
-    .any(|part| name.contains(part))
+    .any(|part| name.contains(&normalized_device_name(part)))
+}
+
+fn normalized_device_name(name: &str) -> String {
+    name.chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+/// HID capabilities describe possible outputs, not the physical key positions.
+/// Only recognizable firmware/model names are classified; a USB vendor alone
+/// (in particular ZMK's shared 1d50:615e) does not identify a keyboard model.
+pub fn firmware_keyboard(name: &str) -> bool {
+    let name = normalized_device_name(name);
+    [
+        "adv360",
+        "advantage360",
+        "advantage2",
+        "ergodox",
+        "moonlander",
+        "zsa voyager",
+        "glove80",
+        "dygma",
+        "qmk",
+        "zmk",
+    ]
+    .iter()
+    .any(|part| name.contains(&normalized_device_name(part)))
 }
 
 pub fn has_bit(bitmap: &str, code: usize) -> bool {
@@ -84,37 +117,150 @@ pub fn devices(contents: &str) -> Vec<Value> {
             continue;
         }
         let location = format!("{} {}", field("P: Phys="), field("S: Sysfs=")).to_lowercase();
-        let internal = ["i8042", "serio", "platform"]
-            .iter()
-            .any(|part| location.contains(part))
-            || ["internal keyboard", "built-in keyboard"]
+        let usb = field("I: Bus=").starts_with("0003");
+        let bluetooth = field("I: Bus=").starts_with("0005");
+        let internal = !usb
+            && !bluetooth
+            && (["i8042", "serio", "platform"]
                 .iter()
-                .any(|part| name.to_lowercase().contains(part));
+                .any(|part| location.contains(part))
+                || ["internal keyboard", "built-in keyboard"]
+                    .iter()
+                    .any(|part| name.to_lowercase().contains(part)));
+        let firmware = firmware_keyboard(name);
+        let mouse = !field("B: REL=").is_empty() && field("B: REL=") != "0";
+        let event = handlers
+            .split_whitespace()
+            .find(|h| h.starts_with("event"))
+            .unwrap_or("");
         result.push(json!({"name":name,"type":if internal {"built-in"} else {"external"},
-            "geometry":if has_bit(bitmap,86) {"iso"} else {"ansi"}, "fnAvailable":has_bit(bitmap,464)}));
+            "usb": usb, "bluetooth":bluetooth, "firmware":firmware, "mouse":mouse,
+            "path":format!("/dev/input/{event}"),
+            "geometry":if has_bit(bitmap,86) {"iso"} else {"ansi"}, "fnAvailable":has_bit(bitmap,464),
+            "fullSize": !internal && !firmware && !mouse
+                && [71,79,82,83,96,102,111].iter().all(|code| has_bit(bitmap,*code))}));
     }
     result
 }
 
 pub fn layout(hyprland: &str, console: &str, input: &str, machine: &str, choice: &str) -> Value {
+    layout_for_config(hyprland, console, input, machine, choice, None)
+}
+
+pub fn layout_for_config(
+    hyprland: &str,
+    console: &str,
+    input: &str,
+    machine: &str,
+    choice: &str,
+    config: Option<&str>,
+) -> Value {
     let root: Value = serde_json::from_str(hyprland).unwrap_or_default();
     let keyboards = root["keyboards"].as_array().cloned().unwrap_or_default();
+    let mut devices = devices(input);
+    let forms = config
+        .and_then(|text| crate::parser::parse(text).ok())
+        .unwrap_or_default();
+    let cfg = forms.iter().find(|form| form.head() == "defcfg");
+    let option = |key: &str| {
+        cfg.and_then(|cfg| {
+            cfg.children[1..]
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .find(|pair| pair[0].value == key)
+                .map(|pair| &pair[1])
+        })
+    };
+    let names = |key: &str| {
+        option(key).map(|node| {
+            node.children
+                .iter()
+                .map(|n| n.value.trim_matches('"').to_owned())
+                .collect::<Vec<_>>()
+        })
+    };
+    let include = names("linux-dev-names-include");
+    let exclude = names("linux-dev-names-exclude").unwrap_or_default();
+    let explicit_paths = option("linux-dev").is_some();
+    let keyboard_only =
+        option("linux-device-detect-mode").is_some_and(|n| n.value == "keyboard-only");
+    for device in &mut devices {
+        let name = device["name"].as_str().unwrap_or("").to_string();
+        // With explicit paths we cannot infer stable symlink targets from /proc.
+        let captured = if explicit_paths {
+            None
+        } else if config.is_some() {
+            Some(
+                include.as_ref().is_none_or(|names| names.contains(&name))
+                    && !exclude.contains(&name)
+                    && !(keyboard_only && device["mouse"] == true),
+            )
+        } else {
+            Some(device["firmware"] != true && device["mouse"] != true)
+        };
+        device["captured"] = json!(captured);
+    }
+    let candidates: Vec<&Value> = devices
+        .iter()
+        .filter(|d| d["captured"] != false && d["mouse"] != true)
+        .collect();
     let physical: Vec<&Value> = keyboards
         .iter()
-        .filter(|k| !excluded(k["name"].as_str().unwrap_or("")))
+        .filter(|k| {
+            !excluded(k["name"].as_str().unwrap_or(""))
+                && candidates.iter().any(|d| {
+                    normalized_device_name(d["name"].as_str().unwrap_or(""))
+                        == normalized_device_name(k["name"].as_str().unwrap_or(""))
+                })
+        })
         .collect();
     let main = physical
         .iter()
         .find(|k| k["main"].as_bool() == Some(true))
         .copied()
         .or_else(|| physical.first().copied());
+    let builtin = candidates.iter().copied().find(|d| d["type"] == "built-in");
+    let full_size = candidates
+        .iter()
+        .copied()
+        .find(|d| d["fullSize"] == true && d["usb"] == true)
+        .or_else(|| candidates.iter().copied().find(|d| d["fullSize"] == true));
+    let selected = (if choice == "thinkpad" { builtin } else { None })
+        .or(if choice == "fullsize" {
+            full_size
+        } else {
+            None
+        })
+        .or_else(|| {
+            candidates
+                .iter()
+                .copied()
+                .find(|d| d["type"] == "external" && d["usb"] == true)
+        })
+        .or_else(|| candidates.iter().copied().find(|d| d["type"] == "external"))
+        .or(builtin)
+        .or_else(|| candidates.first().copied());
+    let mut keyboard = selected.cloned().unwrap_or(json!({}));
+    if keyboard["type"] == "built-in" {
+        keyboard["thinkpad"] = json!(machine.to_lowercase().contains("thinkpad"));
+    }
+    let selected_hypr = selected.and_then(|d| {
+        physical.iter().copied().find(|k| {
+            normalized_device_name(k["name"].as_str().unwrap_or(""))
+                == normalized_device_name(d["name"].as_str().unwrap_or(""))
+        })
+    });
     let mut detected = None;
     let mut source = "Standard";
-    if let Some(main) = main {
+    if let Some(main) = selected_hypr.or(main) {
         let layouts: Vec<&str> = main["layout"].as_str().unwrap_or("").split(',').collect();
-        let index = main["active_layout_index"].as_u64().unwrap_or(0) as usize;
-        detected = preset(layouts.get(index).copied().unwrap_or(layouts[0]))
-            .or_else(|| preset(main["active_keymap"].as_str().unwrap_or("")));
+        detected = main["active_layout_index"]
+            .as_u64()
+            .and_then(|index| layouts.get(index as usize))
+            .and_then(|name| preset(name))
+            .or_else(|| preset(main["active_keymap"].as_str().unwrap_or("")))
+            .or_else(|| preset(layouts[0]));
         if detected.is_some() {
             source = "Hyprland";
         }
@@ -139,30 +285,9 @@ pub fn layout(hyprland: &str, console: &str, input: &str, machine: &str, choice:
             }
         }
     }
-    let devices = devices(input);
-    let main_name = main
-        .and_then(|k| k["name"].as_str())
-        .unwrap_or("")
-        .to_lowercase();
-    let matched = devices.iter().find(|device| {
-        let name = device["name"].as_str().unwrap_or("").to_lowercase();
-        !main_name.is_empty() && (name.contains(&main_name) || main_name.contains(&name))
-    });
-    let builtin = devices.iter().find(|d| d["type"] == "built-in");
-    let external = devices.iter().find(|d| d["type"] == "external");
-    let selected = matched
-        .or_else(|| {
-            if machine.to_lowercase().contains("thinkpad") {
-                builtin
-            } else {
-                None
-            }
-        })
-        .or(external)
-        .or_else(|| devices.first());
-    let keyboard = selected.cloned().unwrap_or(json!({}));
     json!({"id":detected.unwrap_or("de"),"source":source,"choice":choice,
-        "geometry":keyboard["geometry"].as_str().unwrap_or("iso"),"keyboard":keyboard})
+        "geometry":keyboard["geometry"].as_str().unwrap_or("iso"),"keyboard":keyboard,
+        "devices":devices, "available":selected.is_some(), "explicitPaths":explicit_paths})
 }
 
 pub fn theme(contents: &str) -> Value {
@@ -204,7 +329,10 @@ fn settings_path() -> PathBuf {
         .join("kanata-studio-rust/settings.json")
 }
 pub fn choice_valid(choice: &str) -> bool {
-    matches!(choice, "auto" | "thinkpad" | "de" | "us" | "gb")
+    matches!(
+        choice,
+        "auto" | "thinkpad" | "fullsize" | "tkl" | "de" | "us" | "gb"
+    )
 }
 pub fn read_choice() -> String {
     let path = settings_path();
@@ -247,13 +375,18 @@ pub fn save_choice(choice: &str) -> Result<(), String> {
     }
     let path = settings_path();
     fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
-    runtime::atomic_write(
-        &path,
-        json!({"layout":choice}).to_string().as_bytes(),
-        0o600,
-    )
+    let mut settings: Value = fs::read(&path)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        .filter(Value::is_object)
+        .unwrap_or(json!({}));
+    settings["layout"] = json!(choice);
+    runtime::atomic_write(&path, settings.to_string().as_bytes(), 0o600)
 }
 pub fn discover() -> Value {
+    discover_for_config(None)
+}
+pub fn discover_for_config(config: Option<&str>) -> Value {
     let hyprland = if std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some() {
         runtime::command("hyprctl", &["devices", "-j"], Duration::from_millis(1200))
             .unwrap_or_default()
@@ -261,12 +394,16 @@ pub fn discover() -> Value {
         String::new()
     };
     let read = |path: &Path| fs::read_to_string(path).unwrap_or_default();
-    let layout = layout(
+    let default_config = crate::protocol::config_path(&json!({}))
+        .ok()
+        .and_then(|p| fs::read_to_string(p).ok());
+    let layout = layout_for_config(
         &hyprland,
         &read(Path::new("/etc/vconsole.conf")),
         &read(Path::new("/proc/bus/input/devices")),
         &read(Path::new("/sys/class/dmi/id/product_version")),
         &read_choice(),
+        config.or(default_config.as_deref()),
     );
     let palette = read(&home().join(".local/state/omarchy/current/theme/colors.toml"));
     json!({"ok":true,"layout":layout,"theme":theme(&palette)})

@@ -26,7 +26,7 @@ jobs:
           sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/debian.sources
           apt-get update
           apt-get install -y --no-install-recommends \
-            ca-certificates curl git build-essential binutils python3 \
+            ca-certificates curl git build-essential binutils python3 nodejs \
             qt6-base-dev qt6-declarative-dev qt6-wayland \
             qml6-module-qtquick qml6-module-qtquick-controls \
             qml6-module-qtquick-templates qml6-module-qtquick-window \
@@ -41,6 +41,7 @@ jobs:
       - name: Test installer and Rust core
         run: |
           python3 -m unittest discover -s tests -p 'test_*.py'
+          node --test tests/keyboard-model.test.cjs
           cargo fetch --locked
           python3 tools/license_materials.py
           cargo test --locked --offline

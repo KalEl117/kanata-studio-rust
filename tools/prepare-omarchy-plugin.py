@@ -17,8 +17,9 @@ def main():
     subprocess.run([cargo, "build", "--release", "--locked", "--offline", "--bin", "kanata-studio-helper"], cwd=ROOT, check=True)
     target = ROOT / "dist/omarchy-plugin/zoltan.kanata-studio"
     target.mkdir(parents=True, exist_ok=True)
-    for name in ("manifest.json", "BarWidget.qml", "Backend.qml", "MiniKeyboard.qml", "KeyboardModel.js", "KeyEditor.qml", "README.md"):
+    for name in ("manifest.json", "BarWidget.qml", "Backend.qml", "MiniKeyboard.qml", "KeyEditor.qml", "README.md"):
         shutil.copy2(ROOT / "omarchy-plugin" / name, target / name)
+    shutil.copy2(ROOT / "ui/KeyboardModel.js", target / "KeyboardModel.js")
     (target / "bin").mkdir(exist_ok=True)
     shutil.copy2(ROOT / "target/release/kanata-studio-helper", target / "bin/kanata-studio-helper")
     shutil.copy2(ROOT / "tools/install-plugin.py", target / "install.py")

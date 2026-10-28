@@ -183,10 +183,50 @@ colors, status, and countdown have separate change signals, so status and countd
 updates do not rebuild the keyboard view.
 
 Periodic layout, device, and theme detection runs outside the GUI thread. Initial
-detection runs before the window opens. German, US English, UK English, ThinkPad,
-and automatic detection are available. Layout selection is stored in
-`~/.config/kanata-studio-rust/settings.json`; an existing selection from the first
-Qt/Rust prototype is migrated. UI language and panel settings remain in Qt.
+detection runs before the window opens. Automatic display follows the device
+filters of the open Kanata configuration: among the edited keyboards, USB is
+preferred over other external keyboards, and those over the built-in keyboard.
+Plugging and unplugging updates the main window and an open Omarchy popup without
+losing drafts or the selected layer. Excluded devices stay visible with their
+status. If only excluded keyboards are connected, no made-up editable keyboard is
+shown.
+
+Both UIs share one layout model (`ui/KeyboardModel.js`). ThinkPad, full-size, and
+TKL are selectable; German, US English, and UK English remain available as manual
+display options. ANSI Enter sits in the middle letter row, ISO Enter spans two
+rows, and navigation and numpad also appear in the popup. Choosing a language no
+longer turns an external keyboard into a laptop keyboard. Hyprland's normalized
+device names and the active layout index are taken into account. The printed
+language, freely programmed firmware layouts, and the exact form factor of unknown
+keyboards cannot be derived reliably from HID key codes; use the manual selection
+if the form factor differs. Known firmware names such as Adv360 Pro are not
+classified as full-size keyboards because of possible numpad output.
+
+The layout selection in `~/.config/kanata-studio-rust/settings.json` only changes
+the display, not the device filters. Other settings in this file are preserved.
+UI language and panel settings remain in Qt.
+
+### Capture ordinary keyboards automatically, exclude firmware keyboards
+
+Kanata itself handles plugging and unplugging, even while Studio is closed. For an
+Advantage360 Pro, for example, the fixed allow list can be replaced with these
+options in the existing `defcfg` (keep the other options):
+
+```lisp
+linux-device-detect-mode keyboard-only
+linux-continue-if-no-devs-found yes
+linux-dev-names-exclude ("Adv360 Pro Keyboard" "Adv360 Pro")
+```
+
+Remove `linux-dev` and `linux-dev-names-include` for this automatic selection.
+Kanata compares full device names; add other firmware keyboards with their actual
+names. No general HID property identifies every programmable keyboard. Studio's
+detection of known firmware names is a display hint and never changes the active
+configuration on its own. The options are described in the
+[Kanata configuration guide](https://github.com/jtroo/kanata/blob/v1.12.0/docs/config.adoc#linux-only-linux-dev-names-exclude).
+Restart Kanata after changing device filters; a reload is not enough.
+`keyboard-only` skips combined mouse/keyboard interfaces; if a real keyboard only
+offers such an interface, select the device explicitly.
 
 Comments and untouched file sections are preserved. Renaming a layer updates
 direct references. Layers with remaining direct references cannot be deleted.
@@ -217,6 +257,7 @@ Avoid editing the same file with another Studio version while saving or testing.
 ~/.cargo/bin/cargo test --locked --offline
 ~/.cargo/bin/cargo clippy --locked --offline --all-targets -- -D warnings
 ~/.cargo/bin/cargo fmt --check
+node --test tests/keyboard-model.test.cjs
 QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= ./run.sh --self-test
 python3 tools/check-recovery.py
 python3 tools/check-package.py
