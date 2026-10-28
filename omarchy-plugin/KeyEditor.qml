@@ -42,6 +42,7 @@ Column {
         font.bold: true
     }
     Text {
+        objectName: "kanataReadOnlyHint"
         width: parent.width
         visible: root.document.layerEditable === false
         text: "Ebenen aus deflayermap sind hier nur lesbar. Bearbeiten im Studio unter „Konfiguration“."
