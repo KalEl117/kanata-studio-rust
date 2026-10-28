@@ -13,51 +13,18 @@ Der vollständige Editor bietet zusätzlich Makros und einen 30-Sekunden-Test.
 
 ## Unter Linux installieren
 
-Die eigenständige App benötigt weder Omarchy noch Hyprland. Sie kann unter
-Wayland oder X11 laufen; Qt und QML werden im Download-Paket mitgeliefert.
-Installiert wird für den aktuellen Benutzer ohne `sudo`.
+Die eigenständige App benötigt weder Omarchy noch Hyprland und kann unter
+Wayland oder X11 laufen.
 
-### Einfacher Download-Installer
+**Aktuell sind keine Binärdownloads verfügbar.** Die App- und Plugin-Archive,
+Prüfsummen und Release-Installer von v0.2.0 und v0.2.1 wurden am 28.10.2026
+wegen unvollständiger Lizenz- und Quellmaterialien entfernt.
+Versions-Tags und Quellcode-Historie bleiben erhalten.
 
-Voraussetzungen: Linux mit glibc, Python 3.10+ und ein veröffentlichtes Paket
-für die eigene Architektur. GitHub-Konto, GitHub CLI, Rust und Compiler sind
-für die Installation nicht erforderlich.
-
-```sh
-curl -fL https://raw.githubusercontent.com/KalEl117/kanata-studio-rust/main/install.py -o install.py
-python3 install.py
-```
-
-Alternativ `install.py` im Browser aus diesem Repository herunterladen und mit
-Python starten. Das Skript lädt das neueste stabile GitHub-Release, prüft alle
-SHA-256-Prüfsummen, entpackt die Pakete und legt einen App-Launcher an.
-Erneutes Ausführen aktualisiert die Installation. Ohne Omarchy wird nur die
-App installiert; auf Omarchy zusätzlich das passende Plugin mit Aktivierung
-und Shell-Neustart.
-
-**Ab v0.2.1:** Das x86_64-Paket benötigt **glibc 2.36+**. Das ältere
-Release v0.2.0 benötigte noch glibc 2.44. Für aarch64 kann der Installer
-passende Assets auswählen, sobald sie veröffentlicht sind; der Build-Workflow
-baut zunächst nur x86_64.
-
-Optionen:
-
-```sh
-python3 install.py --check-only          # nur herunterladen und prüfen
-python3 install.py --app-only            # auch auf Omarchy nur die App
-python3 install.py --release v0.2.1       # bestimmtes Release auswählen
-python3 install.py --prefix ~/.local     # anderes App-Installationspräfix
-python3 install.py --no-restart          # Omarchy-Shell später neu starten
-```
-
-Das Paket bestimmt seine Mindest-glibc-Version in `manifest.json`. Ein
-unpassendes Paket wird vor der Installation mit Angabe der benötigten und
-vorhandenen Version abgelehnt. Alpine/musl benötigt einen eigenen Build.
-
-Standardpfade sind `~/.local/share/kanata-studio-rust`,
-`~/.local/share/applications/kanata-studio-rust.desktop` und
-`~/.local/bin/kanata-studio-rust`. Falls `~/.local/bin` nicht im `PATH` steht,
-kann die App über den App-Launcher oder den vollständigen Pfad starten.
+Bitte vorerst [den aktuellen Stand von `main` selbst bauen](#aus-dem-quellcode-bauen).
+Der Download-Installer benötigt ein neu veröffentlichtes Binärrelease und kann
+die entfernten Versionen nicht installieren. Der korrigierte Paketbau ist in
+[LICENSING.md](LICENSING.md) beschrieben.
 
 ### Was zusätzlich für Kanata nötig ist
 
@@ -71,24 +38,6 @@ nicht enthalten.
 
 Das Omarchy-Plugin öffnet standardmäßig `~/.config/kanata/kanata.kbd`, ersatzweise
 `~/.config/kanata/config.kbd`. Details: [Plugin-Anleitung](omarchy-plugin/README.md).
-
-### Archiv ohne Download-Installer verwenden
-
-App-Archiv und zugehörige `.sha256`-Datei unter
-[Releases](https://github.com/KalEl117/kanata-studio-rust/releases) herunterladen.
-Im Download-Verzeichnis, hier am Beispiel von v0.2.1:
-
-```sh
-sha256sum -c kanata-studio-rust-0.2.1-linux-x86_64.tar.gz.sha256
-tar -xzf kanata-studio-rust-0.2.1-linux-x86_64.tar.gz
-python3 kanata-studio-rust-0.2.1-linux-x86_64/install.py
-~/.local/bin/kanata-studio-rust
-```
-
-Alternativ lässt sich `launch.sh` direkt aus dem entpackten Ordner starten.
-Python wird nur für die Installation benötigt. Das Paket enthält Qt,
-QML-Module, Plattform-Plugins und die benötigten Laufzeitbibliotheken.
-Grafiktreiber und eine Wayland- oder X11-Sitzung stellt das Zielsystem bereit.
 
 ## Pakete für andere Distributionen bauen
 
@@ -108,7 +57,8 @@ keinen Grafiktreibertest auf den Zielsystemen.
 Nach einem erfolgreichen Lauf liegen App- und Plugin-Archiv, Prüfsummen und Download-Installer
 im Actions-Artefakt `linux-x86_64-glibc-2.36`. Der Workflow veröffentlicht kein
 Release automatisch. Für ein Release müssen diese Dateien mit der passenden
-Version aus `Cargo.toml` als Release-Assets hochgeladen werden. Auf Omarchy
+neuen Version aus `Cargo.toml` als Release-Assets hochgeladen werden.
+Die zurückgezogenen Tags v0.2.0/v0.2.1 nicht wiederverwenden. Auf Omarchy
 benötigt der automatische Installer außerdem das Plugin-Archiv derselben
 Version samt Prüfsumme; andernfalls `--app-only` verwenden. Die CI baut das
 Plugin mit `--skip-validation`, weil dort Omarchy fehlt; auf dem Zielgerät
@@ -120,7 +70,7 @@ Qt sucht Module und Plugins über `qt.conf`; siehe
 [Qt-Dokumentation](https://doc.qt.io/qt-6/qt-conf.html). Die Bibliotheken werden
 dynamisch geladen. Neue Release-Builds enthalten die Distributions-Lizenztexte
 unter `licenses/` und die passenden Quellpakete unter `sources/debian/`.
-Die veröffentlichten Archive v0.2.0/v0.2.1 sind älter als dieser Mechanismus;
+Die zurückgezogenen Archive v0.2.0/v0.2.1 sind älter als dieser Mechanismus;
 siehe [LICENSING.md](LICENSING.md). Native Hilfsprogramme wie Kanata und systemctl
 verwenden weiterhin ihre ursprüngliche Bibliotheksumgebung.
 

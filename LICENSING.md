@@ -66,12 +66,15 @@ tests run in the Debian build job with the upstream validator.
 
 ## Existing releases
 
-Releases v0.2.0 and v0.2.1 were built before this collection was implemented.
-Adding these files to the repository does **not** repair their old binary assets.
-Before continuing to distribute those assets, provide the corresponding notices
-and exact sources for their original builds, or replace them with newly built,
-verified packages under a new release version. Do not describe an old archive as
-compliant solely because the current repository has a LICENSE file.
+The app/plugin archives, checksums, and release installers for v0.2.0 and v0.2.1
+were removed from GitHub Releases on 2026-10-28 because they predated this
+collection and lacked complete redistribution materials. Their version tags
+and source history are retained. No replacement binary release is currently
+published; build the current `main` branch using README.md.
+
+Adding license files to this repository does not retroactively repair copies
+of the old archives. Do not re-upload them. A replacement binary release must
+use a new version and the verified packaging process above.
 
 ## References
 
