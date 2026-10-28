@@ -1,25 +1,71 @@
 use crate::parser::{self, Config, Node};
 use serde::Deserialize;
 
-#[derive(Clone, Default, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub struct Request {
-    pub op: String,
-    pub source: String,
-    pub previous: String,
-    pub layer: usize,
-    pub key: usize,
-    pub name: String,
-    pub expression: String,
-    pub head: String,
-    pub repeat_ms: u32,
-    pub hold_ms: u32,
-    pub tap: String,
-    pub hold: String,
-    pub steps: Vec<String>,
-    pub copy_from: Option<usize>,
-    pub form_index: usize,
+/// One editing operation. On the wire `op` names the variant and fields are camelCase.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(tag = "op", rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum Edit {
+    Clear,
+    Record {
+        previous: String,
+    },
+    Undo,
+    Redo,
+    SetAction {
+        expression: String,
+    },
+    SetTapHold {
+        head: String,
+        repeat_ms: u32,
+        hold_ms: u32,
+        tap: String,
+        hold: String,
+    },
+    SetMacro {
+        head: String,
+        steps: Vec<String>,
+    },
+    AddPhysicalKey {
+        name: String,
+        #[serde(default = "transparent")]
+        expression: String,
+    },
+    AddLayer {
+        name: String,
+        copy_from: Option<usize>,
+    },
+    RenameLayer {
+        name: String,
+    },
+    DeleteLayer,
+    ReplaceConfigForm {
+        form_index: usize,
+        expression: String,
+    },
+    AddConfigForm {
+        expression: String,
+    },
 }
+
+fn transparent() -> String {
+    "_".into()
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct Request {
+    #[serde(flatten)]
+    pub edit: Edit,
+    #[serde(default)]
+    pub source: String,
+    pub layer: Option<usize>,
+    pub key: Option<usize>,
+    /// Selected key that is not in defsrc yet; set by the dispatcher, never read from the wire.
+    #[serde(skip)]
+    pub physical: Option<String>,
+}
+
+/// Each history entry is a full copy of the config, so the oldest entries are dropped.
+pub const HISTORY_LIMIT: usize = 200;
 
 #[derive(Default)]
 pub struct Editor {
@@ -36,71 +82,70 @@ impl Editor {
         !self.redo.is_empty()
     }
 
+    fn remember(&mut self, source: String) {
+        if self.undo.len() >= HISTORY_LIMIT {
+            self.undo.remove(0);
+        }
+        self.undo.push(source);
+    }
+
     pub fn execute(&mut self, req: &Request) -> Result<String, String> {
-        match req.op.as_str() {
-            "clear" => {
+        match &req.edit {
+            Edit::Clear => {
                 self.undo.clear();
                 self.redo.clear();
                 return Ok(req.source.clone());
             }
-            "record" => {
-                if req.previous != req.source {
-                    self.undo.push(req.previous.clone());
+            Edit::Record { previous } => {
+                if *previous != req.source {
+                    self.remember(previous.clone());
                     self.redo.clear();
                 }
                 return Ok(req.source.clone());
             }
-            "undo" | "redo" => {
-                let stack = if req.op == "undo" {
-                    &mut self.undo
-                } else {
-                    &mut self.redo
-                };
+            Edit::Undo | Edit::Redo => {
+                let undo = matches!(req.edit, Edit::Undo);
+                let stack = if undo { &mut self.undo } else { &mut self.redo };
                 let source = stack.last().ok_or("Keine Änderung im Verlauf")?;
                 Config::parse(source)?;
                 let source = stack.pop().unwrap();
-                if req.op == "undo" {
+                if undo {
                     self.redo.push(req.source.clone());
                 } else {
-                    self.undo.push(req.source.clone());
+                    self.remember(req.source.clone());
                 }
                 return Ok(source);
             }
             _ => {}
         }
         let config = Config::parse(&req.source)?;
-        let source = if !req.name.is_empty()
-            && matches!(req.op.as_str(), "setAction" | "setTapHold" | "setMacro")
-        {
-            if req.op == "setAction"
-                && (req.expression.trim() == "_"
-                    || normalized(req.expression.trim()) == normalized(&req.name))
-            {
-                return Ok(req.source.clone());
+        let layer = req.layer.unwrap_or(0);
+        let key = req.key.unwrap_or(0);
+        let source = match (&req.physical, &req.edit) {
+            (
+                Some(name),
+                Edit::SetAction { .. } | Edit::SetTapHold { .. } | Edit::SetMacro { .. },
+            ) => {
+                if let Edit::SetAction { expression } = &req.edit
+                    && (expression.trim() == "_"
+                        || normalized(expression.trim()) == normalized(name))
+                {
+                    return Ok(req.source.clone());
+                }
+                let add = Edit::AddPhysicalKey {
+                    name: name.clone(),
+                    expression: transparent(),
+                };
+                let staged = edit(&req.source, &config, layer, key, &add)?;
+                let staged_config = Config::parse(&staged)?;
+                let added = staged_config.forms[staged_config.src].children.len() - 2;
+                edit(&staged, &staged_config, layer, added, &req.edit)?
             }
-            let staged = edit(
-                &Request {
-                    op: "addPhysicalKey".into(),
-                    expression: "_".into(),
-                    ..req.clone()
-                },
-                &config,
-            )?;
-            let staged_config = Config::parse(&staged)?;
-            edit(
-                &Request {
-                    source: staged.clone(),
-                    key: staged_config.forms[staged_config.src].children.len() - 2,
-                    ..req.clone()
-                },
-                &staged_config,
-            )?
-        } else {
-            edit(req, &config)?
+            _ => edit(&req.source, &config, layer, key, &req.edit)?,
         };
         Config::parse(&source)?;
         if source != req.source {
-            self.undo.push(req.source.clone());
+            self.remember(req.source.clone());
             self.redo.clear();
         }
         Ok(source)
@@ -206,48 +251,69 @@ fn references<'a>(node: &'a Node, name: &str, found: &mut Vec<&'a Node>) {
     {
         found.push(target);
     }
+    // Tuple forms whose n-th element is a list of layer names (kanata parser/src/cfg/chord.rs, override.rs).
+    let layer_list = match node.head() {
+        "defchordsv2" | "defchordsv2-experimental" => Some((5, 4)),
+        "defoverridesv2" => Some((4, 3)),
+        _ => None,
+    };
+    if let Some((size, position)) = layer_list {
+        for tuple in node.children[1..].chunks(size) {
+            if let Some(list) = tuple.get(position).filter(|n| n.list) {
+                found.extend(list.children.iter().filter(|n| !n.list && n.value == name));
+            }
+        }
+    }
     for child in &node.children {
         references(child, name, found);
     }
 }
 
-fn edit(req: &Request, config: &Config) -> Result<String, String> {
-    let source = &req.source;
-    match req.op.as_str() {
-        "setAction" => {
-            let value = req.expression.trim();
+fn edit(
+    source: &str,
+    config: &Config,
+    layer: usize,
+    key: usize,
+    op: &Edit,
+) -> Result<String, String> {
+    match op {
+        Edit::SetAction { expression } => {
+            let value = expression.trim();
             parser::expression(value)?;
-            Ok(patch(source, config.action(req.layer, req.key)?, value))
+            Ok(patch(source, config.action(layer, key)?, value))
         }
-        "setTapHold" => {
+        Edit::SetTapHold {
+            head,
+            repeat_ms,
+            hold_ms,
+            tap,
+            hold,
+        } => {
             if !matches!(
-                req.head.as_str(),
+                head.as_str(),
                 "tap-hold" | "tap-hold-press" | "tap-hold-release"
-            ) || !(1..=5000).contains(&req.repeat_ms)
-                || !(1..=5000).contains(&req.hold_ms)
+            ) || !(1..=5000).contains(repeat_ms)
+                || !(1..=5000).contains(hold_ms)
             {
                 return Err("Ungültige Tap Hold Zeiten oder Variante".into());
             }
-            parser::expression(req.tap.trim())?;
-            parser::expression(req.hold.trim())?;
-            let action = config.action(req.layer, req.key)?;
+            parser::expression(tap.trim())?;
+            parser::expression(hold.trim())?;
+            let action = config.action(layer, key)?;
             let part = action.tap_hold().unwrap_or(action);
             let value = format!(
-                "({} {} {} {} {})",
-                req.head,
-                req.repeat_ms,
-                req.hold_ms,
-                req.tap.trim(),
-                req.hold.trim()
+                "({head} {repeat_ms} {hold_ms} {} {})",
+                tap.trim(),
+                hold.trim()
             );
             Ok(patch(source, part, &value))
         }
-        "setMacro" => {
-            if !crate::actions::MACRO_HEADS.contains(&req.head.as_str()) || req.steps.is_empty() {
+        Edit::SetMacro { head, steps: input } => {
+            if !crate::actions::MACRO_HEADS.contains(&head.as_str()) || input.is_empty() {
                 return Err("Makro benötigt eine Variante und mindestens einen Schritt".into());
             }
             let mut steps = Vec::new();
-            for step in &req.steps {
+            for step in input {
                 let value = step.trim();
                 let first = value.chars().next().ok_or("Leerer Makroschritt")?;
                 if !(first.is_ascii_alphanumeric() || "_+-".contains(first))
@@ -268,12 +334,13 @@ fn edit(req: &Request, config: &Config) -> Result<String, String> {
             }
             Ok(patch(
                 source,
-                config.action(req.layer, req.key)?,
-                &format!("({} {})", req.head, steps.join(" ")),
+                config.action(layer, key)?,
+                &format!("({head} {})", steps.join(" ")),
             ))
         }
-        "addPhysicalKey" => {
-            let key = req.name.trim();
+        Edit::AddPhysicalKey { name, expression } => {
+            let target = layer;
+            let key = name.trim();
             if key.is_empty()
                 || !key
                     .chars()
@@ -281,8 +348,8 @@ fn edit(req: &Request, config: &Config) -> Result<String, String> {
             {
                 return Err("Ungültiger Tastenname".into());
             }
-            parser::expression(req.expression.trim())?;
-            config.layer(req.layer)?;
+            parser::expression(expression.trim())?;
+            config.layer(target)?;
             if config.forms[config.src].children[1..]
                 .iter()
                 .any(|n| normalized(&n.value) == normalized(key))
@@ -311,24 +378,24 @@ fn edit(req: &Request, config: &Config) -> Result<String, String> {
             for (layer, &index) in config.layers.iter().enumerate() {
                 patches.push(append(
                     &config.forms[index],
-                    if layer == req.layer {
-                        req.expression.trim()
+                    if layer == target {
+                        expression.trim()
                     } else {
                         "_"
                     },
                 ));
             }
             patches.sort_by_key(|p| std::cmp::Reverse(p.0));
-            let mut result = source.clone();
+            let mut result = source.to_owned();
             for (at, value) in patches {
                 result.insert_str(at, &value);
             }
             Ok(result)
         }
-        "addLayer" => {
-            let name = req.name.trim();
+        Edit::AddLayer { name, copy_from } => {
+            let name = name.trim();
             valid_name(config, name, None)?;
-            let body = if let Some(index) = req.copy_from {
+            let body = if let Some(index) = *copy_from {
                 let layer = config.layer(index)?;
                 source[layer.children[1].end..layer.end - 1].to_owned()
             } else {
@@ -339,59 +406,63 @@ fn edit(req: &Request, config: &Config) -> Result<String, String> {
             };
             Ok(format!("{source}\n(deflayer {name}{body})\n"))
         }
-        "renameLayer" => {
-            let layer = config.layer(req.layer)?;
-            let name = req.name.trim();
-            valid_name(config, name, Some(config.layers[req.layer]))?;
-            let old = &layer.children[1];
+        Edit::RenameLayer { name } => {
+            let form = config.layer(layer)?;
+            let name = name.trim();
+            valid_name(config, name, Some(config.layers[layer]))?;
+            let old = &form.children[1];
             let mut patches = vec![old];
             for form in &config.forms {
                 references(form, &old.value, &mut patches);
             }
             patches.sort_by_key(|n| std::cmp::Reverse(n.start));
             patches.dedup_by_key(|n| n.start);
-            let mut result = source.clone();
+            let mut result = source.to_owned();
             for node in patches {
                 result.replace_range(node.start..node.end, name);
             }
             Ok(result)
         }
-        "deleteLayer" => {
+        Edit::DeleteLayer => {
             if config.layers.len() <= 1 {
                 return Err("Die letzte Ebene kann nicht gelöscht werden".into());
             }
-            let layer = config.layer(req.layer)?;
-            let name = &layer.children[1].value;
+            let form = config.layer(layer)?;
+            let name = &form.children[1].value;
             let mut found = Vec::new();
             for (index, node) in config.forms.iter().enumerate() {
-                if index != config.layers[req.layer] {
+                if index != config.layers[layer] {
                     references(node, name, &mut found);
                 }
             }
             if !found.is_empty() {
                 return Err("Ebene wird noch von einer Aktion verwendet".into());
             }
-            let mut end = layer.end;
+            let mut end = form.end;
             while matches!(source.as_bytes().get(end), Some(b' ' | b'\t')) {
                 end += 1;
             }
             if source.as_bytes().get(end) == Some(&b'\n') {
                 end += 1;
             }
-            let mut result = source.clone();
-            result.replace_range(layer.start..end, "");
+            let mut result = source.to_owned();
+            result.replace_range(form.start..end, "");
             Ok(result)
         }
-        "replaceConfigForm" | "addConfigForm" => {
-            let value = req.expression.trim();
+        Edit::ReplaceConfigForm {
+            expression,
+            form_index: _,
+        }
+        | Edit::AddConfigForm { expression } => {
+            let value = expression.trim();
             let node = parser::expression(value)?;
             if !editable(&node) {
                 return Err("defsrc und deflayer werden separat verwaltet".into());
             }
-            if req.op == "replaceConfigForm" {
+            if let Edit::ReplaceConfigForm { form_index, .. } = op {
                 let old = config
                     .forms
-                    .get(req.form_index)
+                    .get(*form_index)
                     .filter(|n| editable(n))
                     .ok_or("Ungültiger Konfigurationsblock")?;
                 Ok(patch(source, old, value))
@@ -399,6 +470,8 @@ fn edit(req: &Request, config: &Config) -> Result<String, String> {
                 Ok(format!("{source}\n\n{value}\n"))
             }
         }
-        _ => Err(format!("Unbekannte Operation: {}", req.op)),
+        Edit::Clear | Edit::Record { .. } | Edit::Undo | Edit::Redo => {
+            Err("Verlaufsoperationen ändern keinen Text".into())
+        }
     }
 }

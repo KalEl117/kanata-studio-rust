@@ -36,7 +36,11 @@ fn layer_removal_and_file_replacement_reconcile_selection_in_rust() {
     session.sync(SOURCE, true).unwrap();
     session.select(Some(1), Some(1)).unwrap();
     session
-        .after_edit("deleteLayer", "(defsrc a)(deflayer base a)", 1)
+        .after_edit(
+            &kanata_studio_core::editor::Edit::DeleteLayer,
+            "(defsrc a)(deflayer base a)",
+            1,
+        )
         .unwrap();
     let view = session.view().unwrap();
     assert_eq!(view["selectedLayer"], 0);

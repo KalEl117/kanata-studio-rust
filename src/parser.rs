@@ -73,7 +73,8 @@ pub fn parse(source: &str) -> Result<Vec<Node>, String> {
     while at < source.len() {
         let rest = &source[at..];
         let ch = rest.chars().next().unwrap();
-        if ch.is_whitespace() {
+        // Kanata accepts a leading UTF-8 BOM; treat it like whitespace.
+        if ch.is_whitespace() || ch == '\u{feff}' {
             at += ch.len_utf8();
             continue;
         }

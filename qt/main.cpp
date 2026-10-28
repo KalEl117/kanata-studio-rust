@@ -4,6 +4,7 @@
 #include <QGuiApplication>
 #include <QDir>
 #include <QElapsedTimer>
+#include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
 #include <QFont>
@@ -149,6 +150,7 @@ int main(int argc, char *argv[]) {
         Studio scratch;
         const bool saveWorked = fakeReady && copied && scratch.open(testPath) && scratch.setAction("_") && scratch.save() && !scratch.dirty();
         const QString saveStatus = scratch.status();
+        const bool saveNotFlagged = !scratch.statusError();
         QFile savedFile(testPath);
         const bool savedMatches = savedFile.open(QIODevice::ReadOnly) && QString::fromUtf8(savedFile.readAll()) == scratch.source()
             && !scratch.selectedKeyState().value("changed").toBool();
@@ -157,6 +159,7 @@ int main(int argc, char *argv[]) {
         const QByteArray beforeRollback = scratch.source().toUtf8();
         const bool rollbackWorked = saveWorked && scratch.setAction("esc") && !scratch.save();
         const QString rollbackStatus = scratch.status();
+        const bool rollbackFlagged = scratch.statusError();
         QFile afterFile(testPath);
         const bool rollbackMatches = afterFile.open(QIODevice::ReadOnly) && afterFile.readAll() == beforeRollback;
         afterFile.close();
@@ -215,15 +218,48 @@ int main(int argc, char *argv[]) {
         const bool recoveryWorked = candidateWritten && requestWritten && stateWritten && Preview::runWorker(true) == 0
             && Preview::state().value("phase") == "reverted"
             && recoveredFile.open(QIODevice::ReadOnly) && recoveredFile.readAll() == beforeRollback;
+        recoveredFile.close();
+        scratch.requestSave();
+        const bool asyncStarted = scratch.busy();
+        timer.restart();
+        while (asyncStarted && (scratch.busy() || scratch.dirty()) && timer.elapsed() < 15000)
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+        QFile asyncFile(testPath);
+        const bool asyncSaveWorked = asyncStarted && !scratch.busy() && !scratch.dirty()
+            && asyncFile.open(QIODevice::ReadOnly) && asyncFile.readAll() == scratch.source().toUtf8();
+        asyncFile.close();
+        const QByteArray asyncBytes = scratch.source().toUtf8();
+        QFile bomFile(testPath);
+        const bool bomWritten = bomFile.open(QIODevice::WriteOnly | QIODevice::Truncate)
+            && bomFile.write("\xEF\xBB\xBF" + asyncBytes) == asyncBytes.size() + 3;
+        bomFile.close();
+        const bool bomSaved = bomWritten && scratch.open(testPath) && scratch.source().toUtf8() == asyncBytes
+            && scratch.setAction("tab") && scratch.save();
+        const bool bomKept = bomSaved && bomFile.open(QIODevice::ReadOnly)
+            && bomFile.readAll() == "\xEF\xBB\xBF" + scratch.source().toUtf8() && !scratch.dirty();
+        bomFile.close();
+        const QString invalidPath = testDir.path() + "/invalid.kbd";
+        QFile invalidFile(invalidPath);
+        const bool invalidWritten = invalidFile.open(QIODevice::WriteOnly) && invalidFile.write("(defsrc \xFF a)\n(deflayer base a)\n") > 0;
+        invalidFile.close();
+        const bool invalidRejected = invalidWritten && !scratch.open(invalidPath) && scratch.path() == QFileInfo(testPath).absoluteFilePath();
+        const bool encodingWorked = bomKept && invalidRejected;
         qunsetenv("KANATA_STUDIO_QT_PREVIEW_DIR");
         qunsetenv("KANATA_STUDIO_QT_TEST_CONFIG");
         qputenv("PATH", originalPath);
-        const bool ok = lazyHistory && labelsReadable && edited && editHistory && layerAdded && layerHistory && layerCopied && layerRenamed && layerDeleted && configAdded && configEdited && configHistory && restored && tapWorked && macroWorked && physicalWorked
-            && saveWorked && savedMatches && rollbackWorked && rollbackMatches && previewWorked && cancelWorked && recoveryWorked;
+        const bool serviceParsing = Studio::serviceConfigPath("argv[]=/usr/bin/kanata -c /a.kbd ; x") == "/a.kbd"
+            && Studio::serviceConfigPath("argv[]=/usr/bin/kanata --cfg /b.kbd ; x") == "/b.kbd"
+            && Studio::serviceConfigPath("argv[]=/usr/bin/kanata --cfg=/c.kbd ; x") == "/c.kbd"
+            && Studio::serviceConfigPath("argv[]=/usr/bin/kanata -c=/d.kbd -c /e.kbd ; x") == "/d.kbd"
+            && Studio::serviceConfigPath("argv[]=/usr/bin/kanata --config \"/f g.kbd\" ; x") == "/f g.kbd"
+            && Studio::serviceConfigPath("argv[]=/usr/bin/kanata --cfgx /h.kbd ; x").isEmpty()
+            && Studio::serviceConfigPath("argv[]=/usr/bin/kanata ; x").isEmpty();
+        const bool ok = serviceParsing && lazyHistory && labelsReadable && edited && editHistory && layerAdded && layerHistory && layerCopied && layerRenamed && layerDeleted && configAdded && configEdited && configHistory && restored && tapWorked && macroWorked && physicalWorked
+            && saveWorked && savedMatches && rollbackWorked && rollbackMatches && previewWorked && cancelWorked && recoveryWorked && asyncSaveWorked && encodingWorked && saveNotFlagged && rollbackFlagged;
         std::fprintf(ok ? stdout : stderr, "%s\n", ok ? "Parser, Editoren, Speichern und Testmodus: OK" : "Selbsttest fehlgeschlagen");
-        if (!ok) std::fprintf(stderr, "tap=%d macro=%d taste=%d save=%d rollback=%d preview=%d cancel=%d recover=%d saveStatus=%s rollbackStatus=%s error=%s\n",
+        if (!ok) std::fprintf(stderr, "tap=%d macro=%d taste=%d save=%d rollback=%d preview=%d cancel=%d recover=%d async=%d service=%d encoding=%d flags=%d saveStatus=%s rollbackStatus=%s error=%s\n",
             tapWorked, macroWorked, physicalWorked, saveWorked, rollbackWorked && rollbackMatches, previewWorked,
-            cancelWorked, recoveryWorked,
+            cancelWorked, recoveryWorked, asyncSaveWorked, serviceParsing, encodingWorked, saveNotFlagged && rollbackFlagged,
             saveStatus.toUtf8().constData(), rollbackStatus.toUtf8().constData(),
             previewError.toUtf8().constData());
         if (!ok) std::fprintf(stderr, "physicalStatus=%s\n", physicalStatus.toUtf8().constData());

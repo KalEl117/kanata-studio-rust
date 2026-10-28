@@ -60,8 +60,11 @@ bool ensureRecoveryUnit(const QString &binary, QString &error) {
     const QString unitDir = qEnvironmentVariable("KANATA_STUDIO_UNIT_DIR", QDir::homePath() + "/.config/systemd/user");
     if (!QDir().mkpath(unitDir)) { error = "Wiederherstellungsdienst kann nicht angelegt werden"; return false; }
     const QString unitPath = unitDir + "/kanata-studio-rust-recover.service";
+    // systemd expands % specifiers and C escapes even inside quotes, so the path must be escaped for both.
+    QString execPath = binary;
+    execPath.replace('\\', "\\\\").replace('"', "\\\"").replace('%', "%%");
     const QByteArray unit = ("[Unit]\nDescription=Restore interrupted Kanata Studio Rust preview\nBefore=kanata.service\n\n"
-                             "[Service]\nType=oneshot\nExecStart=\"" + binary + "\" --recover-preview\n\n"
+                             "[Service]\nType=oneshot\nExecStart=\"" + execPath + "\" --recover-preview\n\n"
                              "[Install]\nWantedBy=default.target\n").toUtf8();
     const bool unitChanged = readBytes(unitPath) != unit;
     const QString setupStamp = fileName("recovery-unit.ready");

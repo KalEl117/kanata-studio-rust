@@ -1,7 +1,7 @@
 //! Linux file/service operations. The preview worker runs independently of the GUI.
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde::Deserialize;
-use serde_json::{Value, json};
+use serde_json::json;
 use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
@@ -307,31 +307,4 @@ pub fn worker(directory: &Path, recover: bool) -> Result<(), String> {
             Err(error)
         }
     }
-}
-
-pub fn dispatch(input: &Value) -> Result<Value, String> {
-    let text = |name: &str| {
-        input[name]
-            .as_str()
-            .ok_or_else(|| format!("Feld fehlt: {name}"))
-    };
-    match text("op")? {
-        "check" => check(text("binary")?, Path::new(text("path")?), text("source")?)?,
-        "save" => {
-            let original = STANDARD
-                .decode(text("original")?)
-                .map_err(|e| e.to_string())?;
-            save(
-                Path::new(text("path")?),
-                &original,
-                text("source")?.as_bytes(),
-            )?;
-        }
-        "worker" => worker(
-            Path::new(text("directory")?),
-            input["recover"].as_bool().unwrap_or(false),
-        )?,
-        _ => return Err("Unbekannte Laufzeitoperation".into()),
-    }
-    Ok(json!({"ok":true}))
 }

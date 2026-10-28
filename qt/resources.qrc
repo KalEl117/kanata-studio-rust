@@ -3,5 +3,6 @@
     <file alias="main.qml">../target/ui/main.qml</file>
     <file alias="ActionPanel.qml">../target/ui/ActionPanel.qml</file>
     <file alias="KeyboardModel.js">../target/ui/KeyboardModel.js</file>
+    <file alias="Translations.js">../target/ui/Translations.js</file>
   </qresource>
 </RCC>

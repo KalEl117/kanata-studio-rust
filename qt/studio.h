@@ -16,6 +16,7 @@ class Studio : public QObject {
     Q_OBJECT
     Q_PROPERTY(QString path READ path NOTIFY documentChanged)
     Q_PROPERTY(QString status READ status NOTIFY statusChanged)
+    Q_PROPERTY(bool statusError READ statusError NOTIFY statusChanged)
     Q_PROPERTY(QString source READ source NOTIFY documentChanged)
     Q_PROPERTY(bool dirty READ dirty NOTIFY documentChanged)
     Q_PROPERTY(bool canUndo READ canUndo NOTIFY historyChanged)
@@ -37,11 +38,18 @@ class Studio : public QObject {
     Q_PROPERTY(bool previewActive READ previewActive NOTIFY previewChanged)
     Q_PROPERTY(bool previewReady READ previewReady NOTIFY previewChanged)
     Q_PROPERTY(int previewRemaining READ previewRemaining NOTIFY previewChanged)
+    Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
 public:
+    // Slow work (kanata --check, systemctl) runs off the GUI thread; only plain values cross over.
+    enum class JobKind { Check, Save, Preview };
+    struct Job { JobKind kind = JobKind::Check; QString binary, path, source, launcher; QByteArray diskHash; };
+    // Text as it goes to disk: the editor never sees a BOM, but a file that had one keeps it.
+    struct JobResult { bool ok = false; QString status; };
     explicit Studio(QObject *parent = nullptr);
     ~Studio() override;
     QString path() const { return m_path; }
     QString status() const { return m_status; }
+    bool statusError() const { return m_statusError; }
     QString source() const { return m_source; }
     bool dirty() const { return m_source != m_original; }
     bool canUndo() const { return m_canUndo; }
@@ -63,7 +71,10 @@ public:
     bool previewActive() const { return m_previewActive; }
     bool previewReady() const { return m_previewReady; }
     int previewRemaining() const { return m_previewRemaining; }
+    bool busy() const { return m_jobWatcher.isRunning(); }
     void initializePreview();
+    // First config passed via -c/--cfg (space or '='); kanata starts with that one. Empty if none.
+    static QString serviceConfigPath(const QString &execStart);
     Q_INVOKABLE bool open(const QString &filename);
     Q_INVOKABLE void selectLayer(int index);
     Q_INVOKABLE void selectKey(int index);
@@ -85,9 +96,12 @@ public:
     Q_INVOKABLE void setLayoutChoice(const QString &choice);
     Q_INVOKABLE bool undo();
     Q_INVOKABLE bool redo();
-    Q_INVOKABLE bool check();
-    Q_INVOKABLE bool save();
-    Q_INVOKABLE bool startPreview();
+    bool check();
+    bool save();
+    bool startPreview();
+    Q_INVOKABLE void requestCheck();
+    Q_INVOKABLE void requestSave();
+    Q_INVOKABLE void requestPreview();
     Q_INVOKABLE bool cancelPreview();
     Q_INVOKABLE void discard();
     Q_INVOKABLE void report(const QString &message);
@@ -105,16 +119,21 @@ signals:
     void layoutChanged();
     void statusChanged();
     void previewChanged();
+    void busyChanged();
 private:
+    bool prepareJob(JobKind kind, Job &job);
+    static JobResult runJob(const Job &job);
+    bool finishJob(const Job &job, const JobResult &result);
+    void requestJob(JobKind kind);
     bool refresh(QString *error = nullptr);
     void applyView(const QJsonObject &view);
     void applyEnvironment(const QJsonObject &result);
     QString effectiveLayout() const;
     QString runtimeLauncher() const;
-    bool serviceUsesOpenFile(QString &error) const;
+    static bool serviceUsesOpenFile(const QString &path, QString &error);
     void updatePreview();
     void detectKeyboardLayout();
-    void setStatus(const QString &message);
+    void setStatus(const QString &message, bool error = false);
     QString kanataBinary() const;
     QString m_path;
     QString m_source;
@@ -127,7 +146,10 @@ private:
     bool rustEdit(const QString &operation, QJsonObject arguments = {});
     void clearRustHistory();
     QByteArray m_diskHash;
+    bool m_bom = false;
+    QString diskText(const QString &source) const { return m_bom ? QChar(0xFEFF) + source : source; }
     QString m_status;
+    bool m_statusError = false;
     QVariantList m_layers;
     QVariantList m_keys;
     QVariantMap m_theme;
@@ -139,6 +161,8 @@ private:
     mutable QHash<QString, QString> m_keyNames;
     QVariantMap m_keyNamesMap;
     QFutureWatcher<QJsonObject> m_environmentWatcher;
+    QFutureWatcher<JobResult> m_jobWatcher;
+    Job m_job;
     int m_selectedLayer = 0;
     int m_selectedKey = -1;
     QString m_selectedPhysicalKey;

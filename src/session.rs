@@ -1,5 +1,7 @@
 use crate::{
-    actions, environment,
+    actions,
+    editor::Edit,
+    environment,
     parser::{Config, Node},
 };
 use serde_json::{Value, json};
@@ -94,13 +96,15 @@ impl Session {
         self.physical_key = Some(name.into());
         Ok(())
     }
-    pub fn after_edit(&mut self, op: &str, source: &str, layer: usize) -> Result<(), String> {
+    pub fn after_edit(&mut self, edit: &Edit, source: &str, layer: usize) -> Result<(), String> {
         self.sync(source, false)?;
         let config = self.config.as_ref().unwrap();
-        match op {
-            "addLayer" => self.layer = config.layers.len() - 1,
-            "addPhysicalKey" => self.key = Some(config.forms[config.src].children.len() - 2),
-            "deleteLayer" => self.layer = layer.min(config.layers.len() - 1),
+        match edit {
+            Edit::AddLayer { .. } => self.layer = config.layers.len() - 1,
+            Edit::AddPhysicalKey { .. } => {
+                self.key = Some(config.forms[config.src].children.len() - 2)
+            }
+            Edit::DeleteLayer => self.layer = layer.min(config.layers.len() - 1),
             _ => {}
         }
         if let Some(key) = self.key {
