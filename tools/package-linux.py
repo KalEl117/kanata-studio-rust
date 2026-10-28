@@ -12,6 +12,7 @@ import subprocess
 import tarfile
 import tempfile
 import tomllib
+from license_materials import copy_project_notices, collect_native_sources
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = tomllib.loads((ROOT / "Cargo.toml").read_text())["package"]["version"]
@@ -26,22 +27,29 @@ def dependencies(path):
         raise RuntimeError(f"Fehlende Bibliothek für {path}:\n{report}")
     return [Path(match) for match in re.findall(r"=> (/\S+)", report)]
 
-def build_bundle(bundle):
+def build_bundle(bundle, development=False):
     (bundle / "bin").mkdir(parents=True)
     (bundle / "lib").mkdir()
     shutil.copy2(ROOT / "qt/kanata-studio-rust", bundle / "bin/kanata-studio-rust")
     shutil.copy2(ROOT / "target/release/kanata-studio-helper", bundle / "bin/kanata-studio-helper")
+    origins = {}
     qml = Path(output(["qmake6", "-query", "QT_INSTALL_QML"]).strip())
     plugins = Path(output(["qmake6", "-query", "QT_INSTALL_PLUGINS"]).strip())
     for name in ("QtQuick", "QtQml", "QtCore", "Qt/labs/settings", "Qt/labs/platform"):
         if (qml / name).exists():
             shutil.copytree(qml / name, bundle / "qml" / name, dirs_exist_ok=True)
+            for copied in (bundle / "qml" / name).rglob("*"):
+                if copied.is_file():
+                    origins[copied.relative_to(bundle)] = qml / copied.relative_to(bundle / "qml")
     for name in ("platforms", "wayland-decoration-client", "wayland-graphics-integration-client", "wayland-shell-integration", "xcbglintegrations", "imageformats", "iconengines", "platformthemes", "styles", "networkinformation", "tls"):
         if (plugins / name).exists():
             shutil.copytree(plugins / name, bundle / "plugins" / name,
                             ignore=lambda directory,names:[n for n in names if n.endswith('.so')
                                 and Path(directory).name in ("imageformats", "iconengines", "platformthemes", "styles")
                                 and not n.startswith('libq')])
+            for copied in (bundle / "plugins" / name).rglob("*"):
+                if copied.is_file():
+                    origins[copied.relative_to(bundle)] = plugins / copied.relative_to(bundle / "plugins")
     queue = [path for path in bundle.rglob("*") if path.is_file() and path.open("rb").read(4) == b"\x7fELF"]
     scanned = set()
     versions = set()
@@ -55,29 +63,11 @@ def build_bundle(bundle):
             destination = bundle / "lib" / dependency.name
             if not destination.exists():
                 shutil.copy2(dependency, destination)
+                origins[destination.relative_to(bundle)] = dependency
                 queue.append(destination)
-    for licenses in Path("/usr/share/licenses").glob("qt6-*"):
-        shutil.copytree(licenses, bundle / "licenses" / licenses.name)
-    # Include distribution notices for other copied shared libraries when available.
-    packages = set()
-    for path in (bundle / "lib").iterdir() if shutil.which("pacman") else ():
-        found = subprocess.run(["pacman", "-Qqo", f"/usr/lib/{path.name}"], text=True, capture_output=True)
-        if found.returncode == 0: packages.update(found.stdout.splitlines())
-    for package in packages:
-        licenses = Path("/usr/share/licenses") / package
-        if licenses.is_dir() and not (bundle / "licenses" / package).exists():
-            shutil.copytree(licenses, bundle / "licenses" / package)
-    # Debian keeps redistribution notices in /usr/share/doc, not /usr/share/licenses.
-    if shutil.which("dpkg-query"):
-        for path in (bundle / "lib").iterdir():
-            found = subprocess.run(["dpkg-query", "-S", f"*/{path.name}"], text=True, capture_output=True)
-            for line in found.stdout.splitlines():
-                package = line.split(": ", 1)[0].split(":", 1)[0]
-                notice = Path("/usr/share/doc") / package / "copyright"
-                if notice.is_file():
-                    target = bundle / "licenses" / package
-                    target.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(notice, target / "copyright")
+    copy_project_notices(bundle)
+    if not development:
+        collect_native_sources(bundle, origins)
     (bundle / "bin/qt.conf").write_text("[Paths]\nPrefix=..\nPlugins=plugins\nQmlImports=qml\nLibraries=lib\n")
     (bundle / "launch.sh").write_text('''#!/bin/sh
 set -eu
@@ -104,6 +94,8 @@ exec "$bundle_dir/bin/kanata-studio-rust" "$@"
     shutil.copy2(ROOT / "tests/fixtures/wrapped-layout.kbd", bundle / "share/test.kbd")
     minimum = max(versions, key=lambda version:tuple(map(int,version.split('.'))))
     metadata = {"name":"Kanata Studio Rust", "version":VERSION, "architecture":platform.machine(),
+        "license":"MIT", "redistributable":not development,
+        "sourceCommit":output(["git", "-c", f"safe.directory={ROOT}", "-C", str(ROOT), "rev-parse", "HEAD"]).strip(),
         "minimumGlibc":minimum, "qt":output(["qmake6", "-query", "QT_VERSION"]).strip(),
         "bundledLibraries":sorted(path.name for path in (bundle / "lib").iterdir())}
     (bundle / "manifest.json").write_text(json.dumps(metadata, indent=2)+"\n")
@@ -125,23 +117,28 @@ Die grafische Oberfläche und der Qt-Adapter bleiben Qt/C++; Parser,
 Bearbeitung, Verlauf, Auswahl, Layout-/Geräte-/Theme-Erkennung und der
 Test-/Wiederherstellungsprozess verwenden Rust.
 
-Lizenztexte der Laufzeitbibliotheken liegen unter licenses/.
-Qt-Bibliotheken werden dynamisch geladen und können unter lib/ ersetzt werden.
-Qt-Quellpakete zu dieser Version: https://download.qt.io/archive/qt/
-Weitere Distributionsquellen: https://gitlab.archlinux.org/archlinux/packaging/packages
+Project license: MIT (LICENSE). This application uses Qt under LGPLv3.
+See THIRD_PARTY_NOTICES.md and licenses/ for copyright and license texts.
+Qt libraries are dynamically loaded and may be modified/replaced in lib/,
+plugins/ and qml/. Reverse engineering to debug such modifications is permitted.
+Native library sources and build recipes: sources/debian/ (release bundles).
+See LICENSING.md for rebuild/replacement instructions and source inventory.
+Distribution status: {'PRIVATE DEVELOPMENT BUILD - DO NOT REDISTRIBUTE' if development else 'includes native source packages and notices'}
 ''')
     return metadata
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--install", action="store_true")
+    parser.add_argument("--development", action="store_true",
+                        help="Private local test only; omits native sources, not for redistribution")
     args = parser.parse_args()
     name = f"kanata-studio-rust-{VERSION}-linux-{platform.machine()}"
     dist = ROOT / "dist"
     dist.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="kanata-rust-package-") as temporary:
         bundle = Path(temporary) / name
-        metadata = build_bundle(bundle)
+        metadata = build_bundle(bundle, development=args.development)
         env = dict(os.environ, QT_QPA_PLATFORM="offscreen", QT_QPA_PLATFORMTHEME="")
         check = subprocess.run([str(bundle / "launch.sh"), "--self-test"], env=env,
                                text=True, capture_output=True, timeout=30)

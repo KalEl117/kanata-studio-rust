@@ -4,6 +4,7 @@ import argparse
 import pathlib
 import shutil
 import subprocess
+from license_materials import copy_project_notices
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -21,6 +22,7 @@ def main():
     (target / "bin").mkdir(exist_ok=True)
     shutil.copy2(ROOT / "target/release/kanata-studio-helper", target / "bin/kanata-studio-helper")
     shutil.copy2(ROOT / "tools/install-plugin.py", target / "install.py")
+    copy_project_notices(target)
     if not args.skip_validation:
         subprocess.run(["omarchy", "plugin", "validate", str(target)], check=True)
     print(f"Plugin vorbereitet: {target}")

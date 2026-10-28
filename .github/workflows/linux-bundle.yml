@@ -22,6 +22,8 @@ jobs:
     steps:
       - name: Install build tools and Qt runtime modules
         run: |
+          # Fetch corresponding sources from the same repositories as the binaries.
+          sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/debian.sources
           apt-get update
           apt-get install -y --no-install-recommends \
             ca-certificates curl git build-essential binutils python3 \
@@ -40,6 +42,7 @@ jobs:
         run: |
           python3 -m unittest discover -s tests -p 'test_*.py'
           cargo fetch --locked
+          python3 tools/license_materials.py
           cargo test --locked --offline
       - name: Cache pinned upstream test validator
         id: validator-cache
@@ -69,11 +72,8 @@ jobs:
               manifest = json.load(archive.extractfile(path.name.removesuffix('.tar.gz') + '/manifest.json'))
           assert tuple(map(int, manifest['minimumGlibc'].split('.'))) <= (2, 36), manifest
           PY
-          mkdir -p dist/ci
           cp install.py dist/
-          cp /tmp/kanata-validator/bin/kanata dist/ci/
       - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
         with:
           name: linux-x86_64-glibc-2.36
           path: |
@@ -82,8 +82,7 @@ jobs:
             dist/kanata-studio-plugin-*-linux-x86_64.tar.gz
             dist/kanata-studio-plugin-*-linux-x86_64.tar.gz.sha256
             dist/install.py
-            dist/ci/kanata
-          if-no-files-found: warn
+          if-no-files-found: error
 
   smoke-test:
     needs: build
@@ -113,11 +112,9 @@ jobs:
       - name: Verify checksum, install and launch without system Qt
         run: |
           cd bundle
-          chmod +x ci/kanata
-          export PATH="$PWD/ci:$PATH"
           sha256sum -c *.sha256
           tar -xzf kanata-studio-rust-*-linux-x86_64.tar.gz
           python3 kanata-studio-rust-*-linux-x86_64/install.py --prefix /tmp/studio-install
-          /tmp/studio-install/bin/kanata-studio-rust --self-test
+          /tmp/studio-install/bin/kanata-studio-rust --display-check
           /tmp/studio-install/bin/kanata-studio-rust --screenshot /tmp/studio.png /tmp/studio-install/share/kanata-studio-rust/share/test.kbd
           test -s /tmp/studio.png

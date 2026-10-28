@@ -9,5 +9,6 @@ jobs:
         run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
       - run: cargo +stable fmt --check
       - run: cargo +stable test --locked
+      - run: python3 tools/license_materials.py
       - run: cargo +stable clippy --locked --all-targets -- -D warnings
       - run: python3 -m unittest discover -s tests -p 'test_*.py'
