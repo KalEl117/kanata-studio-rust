@@ -98,7 +98,7 @@ Column {
                     spacing: root.scaled(5)
                     Item {
                         visible: keyboardRow.arrowRow
-                        width: visible ? Math.max(0, keyboardRow.width - 3 * keyboardRow.arrowWidth - root.scaled(10)) : 0
+                        width: visible ? Math.max(0, keyboardRow.width - 3 * keyboardRow.arrowWidth - 3 * keyboardRow.spacing) : 0
                         height: 1
                     }
                     Repeater {

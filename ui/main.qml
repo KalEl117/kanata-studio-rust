@@ -712,7 +712,8 @@ ApplicationWindow {
                                 spacing: 5
                                 Item {
                                     visible: parent.arrowRow
-                                    width: visible ? Math.max(0, parent.width - 3 * parent.bottomArrowWidth - 10) : 0
+                                    // Three gaps: spacer→←, ←→↓, ↓→→; aligns the arrows under PageUp/↑/PageDown.
+                                    width: visible ? Math.max(0, parent.width - 3 * parent.bottomArrowWidth - 3 * parent.spacing) : 0
                                     height: 1
                                 }
                                 Repeater {
