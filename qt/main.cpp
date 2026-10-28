@@ -71,6 +71,7 @@ int main(int argc, char *argv[]) {
     bool selfTest = false;
     bool startupCheck = false;
     bool benchmarkUi = false;
+    bool uiCheck = false;
     for (int i = 1; i < argc; ++i) {
         const QString arg = QString::fromLocal8Bit(argv[i]);
         if (arg == "--screenshot" && i + 1 < argc) screenshot = QString::fromLocal8Bit(argv[++i]);
@@ -80,6 +81,7 @@ int main(int argc, char *argv[]) {
         else if (arg == "--self-test") selfTest = true;
         else if (arg == "--startup-check") startupCheck = true;
         else if (arg == "--benchmark-ui") benchmarkUi = true;
+        else if (arg == "--ui-check") uiCheck = true;
         else studio.open(arg);
     }
     if (selfTest) {
@@ -270,7 +272,7 @@ int main(int argc, char *argv[]) {
         std::fprintf(ok ? stdout : stderr, "%s\n", studio.status().toUtf8().constData());
         return ok ? 0 : 1;
     }
-    if (screenshot.isEmpty() && !benchmarkUi) studio.initializePreview();
+    if (screenshot.isEmpty() && !benchmarkUi && !uiCheck) studio.initializePreview();
     if (startupCheck) {
         const QJsonObject result{{"ok", studio.previewReady()}, {"source", studio.source()},
                                  {"state", QJsonObject::fromVariantMap(Preview::state())}, {"status", studio.status()}};
@@ -284,6 +286,33 @@ int main(int argc, char *argv[]) {
     engine.load(QUrl("qrc:/main.qml"));
     startupMark("Oberfläche geladen");
     if (engine.rootObjects().isEmpty()) return 1;
+    if (uiCheck) {
+        // Rebuilt combo models (here: a language switch) must not reset the key editor form,
+        // otherwise "Apply" would silently write a different hold action. Draft only, never saved.
+        QObject *root = engine.rootObjects().first();
+        QObject *panel = root->findChild<QObject *>("editorPanel");
+        QObject *holdMode = panel ? panel->findChild<QObject *>("holdMode") : nullptr;
+        QObject *holdLayer = panel ? panel->findChild<QObject *>("holdLayerBox") : nullptr;
+        const QString layer = studio.layers().value(0).toString();
+        const QVariant language = root->property("uiLanguage");
+        studio.selectLayer(0); studio.selectKey(0);
+        bool ok = holdMode && holdLayer && !layer.isEmpty()
+            && studio.setTapHold("tap-hold", 150, 200, "esc", "(layer-while-held " + layer + ")");
+        if (ok) QMetaObject::invokeMethod(panel, "sync");
+        QCoreApplication::processEvents();
+        const auto formShowsLayer = [&] {
+            return holdMode->property("currentIndex").toInt() == 2 && holdLayer->property("currentText").toString() == layer;
+        };
+        const bool before = ok && formShowsLayer();
+        root->setProperty("uiLanguage", language.toString() == "en" ? "de" : "en");
+        QCoreApplication::processEvents();
+        const bool after = ok && formShowsLayer();
+        root->setProperty("uiLanguage", language);
+        studio.discard();
+        std::fprintf(before && after ? stdout : stderr, "UI-Prüfung: %s (vorher=%d nach Sprachwechsel=%d)\n",
+                     before && after ? "OK" : "fehlgeschlagen", before, after);
+        return before && after ? 0 : 1;
+    }
     if (benchmarkUi) {
         QTimer::singleShot(200, &app, [&] {
             const QString original = studio.source();
