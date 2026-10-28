@@ -120,3 +120,38 @@ jobs:
           /tmp/studio-install/bin/kanata-studio-rust --screenshot /tmp/studio.png /tmp/studio-install/share/kanata-studio-rust/share/test.kbd
           test -s /tmp/studio.png
           /tmp/studio-install/bin/kanata-studio-rust --ui-check /tmp/studio-install/share/kanata-studio-rust/share/test.kbd
+
+  release-draft:
+    # Tags only: attach the tested artifact to a draft release. Publishing stays a manual step.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, smoke-test]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-x86_64-glibc-2.36
+          path: bundle
+      - name: Check tag, version and assets
+        run: |
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')
+          test "$TAG" = "v$version" || { echo "Tag $TAG passt nicht zu Cargo.toml ($version)"; exit 1; }
+          cd bundle
+          sha256sum -c *.sha256
+          ls kanata-studio-rust-$version-linux-x86_64.tar.gz kanata-studio-plugin-$version-linux-x86_64.tar.gz install.py
+      - name: Create or update draft release
+        run: |
+          if state=$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null); then
+            test "$state" = true || { echo "Release $TAG ist bereits veröffentlicht; Dateien bleiben unverändert"; exit 1; }
+            gh release upload "$TAG" bundle/* --clobber
+          else
+            notes=docs/release-notes/$TAG.md
+            if [ -f "$notes" ]; then set -- --notes-file "$notes"; else set -- --generate-notes; fi
+            gh release create "$TAG" bundle/* --draft --verify-tag --title "$TAG" "$@"
+          fi

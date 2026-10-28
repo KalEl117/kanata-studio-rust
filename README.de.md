@@ -76,10 +76,12 @@ installiertes Qt. Das prüft keinen echten Wayland-/X11-Desktop und ersetzt
 keinen Grafiktreibertest auf den Zielsystemen.
 
 Nach einem erfolgreichen Lauf liegen App- und Plugin-Archiv, Prüfsummen und Download-Installer
-im Actions-Artefakt `linux-x86_64-glibc-2.36`. Der Workflow veröffentlicht kein
-Release automatisch. Für ein Release müssen diese Dateien mit der passenden
-neuen Version aus `Cargo.toml` als Release-Assets hochgeladen werden.
-Die zurückgezogenen Tags v0.2.0/v0.2.1 nicht wiederverwenden. Auf Omarchy
+im Actions-Artefakt `linux-x86_64-glibc-2.36`. Für ein Release die Version in
+`Cargo.toml` erhöhen, optional Release Notes als `docs/release-notes/vX.Y.Z.md`
+ablegen und den Tag `vX.Y.Z` pushen. Wenn Build und alle Containertests bestehen,
+prüft der Workflow, ob Tag und `Cargo.toml` übereinstimmen, und hängt diese
+Dateien an einen Release-Entwurf. Den Entwurf prüfen und dann von Hand
+veröffentlichen. Die zurückgezogenen Tags v0.2.0/v0.2.1 nicht wiederverwenden. Auf Omarchy
 benötigt der automatische Installer außerdem das Plugin-Archiv derselben
 Version samt Prüfsumme; andernfalls `--app-only` verwenden. Die CI baut das
 Plugin mit `--skip-validation`, weil dort Omarchy fehlt; auf dem Zielgerät

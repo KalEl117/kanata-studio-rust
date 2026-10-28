@@ -294,9 +294,13 @@ int main(int argc, char *argv[]) {
         QObject *holdMode = panel ? panel->findChild<QObject *>("holdMode") : nullptr;
         QObject *holdLayer = panel ? panel->findChild<QObject *>("holdLayerBox") : nullptr;
         const QString layer = studio.layers().value(0).toString();
+        if (layer.isEmpty()) {
+            std::fprintf(stderr, "UI-Prüfung: keine Konfiguration mit Ebenen geladen (Datei als Argument angeben)\n");
+            return 1;
+        }
         const QVariant language = root->property("uiLanguage");
         studio.selectLayer(0); studio.selectKey(0);
-        bool ok = holdMode && holdLayer && !layer.isEmpty()
+        bool ok = holdMode && holdLayer
             && studio.setTapHold("tap-hold", 150, 200, "esc", "(layer-while-held " + layer + ")");
         if (ok) QMetaObject::invokeMethod(panel, "sync");
         QCoreApplication::processEvents();

@@ -74,9 +74,12 @@ the finished package without system Qt. These checks do not exercise a real
 Wayland/X11 desktop or replace graphics-driver testing on target machines.
 
 After a successful run, the `linux-x86_64-glibc-2.36` Actions artifact contains
-the app and plugin archives, checksums, and download installer. The workflow does
-not publish releases automatically. Upload these files as release assets using
-a new version from `Cargo.toml`; do not reuse the withdrawn v0.2.0/v0.2.1 tags.
+the app and plugin archives, checksums, and download installer. To release, bump
+the version in `Cargo.toml`, optionally add notes as
+`docs/release-notes/vX.Y.Z.md`, and push the tag `vX.Y.Z`. After the build and all
+container tests pass, the workflow checks that the tag matches `Cargo.toml` and
+attaches these files to a draft release. Review the draft, then publish it
+manually. Do not reuse the withdrawn v0.2.0/v0.2.1 tags.
 
 On Omarchy, the download installer also needs the plugin archive and checksum
 for the same release; otherwise, use `--app-only`. CI packages the plugin with
