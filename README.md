@@ -157,7 +157,12 @@ cd kanata-studio-rust
 ```
 
 You can pass a `.kbd` file as an argument. Without one, the app opens
-`~/.config/kanata/kanata.kbd` or `config.kbd`; it does not create a configuration.
+`~/.config/kanata/kanata.kbd`, `config.kbd`, or the file `kanata.service` runs.
+If none exists, a first-start screen asks before creating a configuration. It
+lists every key of the detected keyboard in `defsrc`, with a base layer where
+every key keeps its normal function (`_`). If Kanata is installed, it checks the
+file first. An existing file is never replaced. The screen also shows whether
+Kanata and `kanata.service`, which are needed to check, save, and test, were found.
 `run.sh` launches the existing executable and builds only on first launch or
 after changes to source, build files, or QML. `./build.sh` always runs the build
 checks. Builds use dependencies from `Cargo.lock` offline.

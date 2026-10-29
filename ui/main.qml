@@ -59,7 +59,7 @@ ApplicationWindow {
 
     function keyIndex(name) {
         var lower = String(name).toLowerCase()
-        var aliases = {"min":"minus", "-":"minus", "eql":"equal", "=":"equal", "lbrc":"leftbracket", "[":"leftbracket", "rbrc":"rightbracket", "]":"rightbracket", "scln":"semicolon", ";":"semicolon", "apo":"apostrophe", "apos":"apostrophe", "'":"apostrophe", "comm":"comma", ",":"comma", ".":"dot", "/":"slash", "bksl":"backslash", "\\":"backslash", "102d":"intlbackslash", "lsgt":"intlbackslash", "nubs":"intlbackslash", "<":"intlbackslash", "escape":"esc", "backquote":"grv", "backspace":"bspc", "enter":"ret", "space":"spc", "capslock":"caps", "shiftleft":"lsft", "shiftright":"rsft", "controlleft":"lctl", "controlright":"rctl", "metaleft":"lmeta", "metaright":"rmeta", "altleft":"lalt", "altright":"ralt", "period":"dot", "quote":"apostrophe", "bracketleft":"leftbracket", "bracketright":"rightbracket", "delete":"del", "insert":"ins", "pageup":"pgup", "pagedown":"pgdn", "arrowleft":"lft", "arrowright":"rght", "arrowup":"up", "arrowdown":"down", "printscreen":"ssrq", "sysrq":"ssrq"}
+        var aliases = {"min":"minus", "-":"minus", "eql":"equal", "=":"equal", "lbrc":"leftbracket", "[":"leftbracket", "rbrc":"rightbracket", "]":"rightbracket", "scln":"semicolon", ";":"semicolon", "apo":"apostrophe", "apos":"apostrophe", "'":"apostrophe", "comm":"comma", ",":"comma", ".":"dot", "/":"slash", "bksl":"backslash", "\\":"backslash", "102d":"intlbackslash", "lsgt":"intlbackslash", "nubs":"intlbackslash", "<":"intlbackslash", "escape":"esc", "backquote":"grv", "backspace":"bspc", "enter":"ret", "space":"spc", "capslock":"caps", "shiftleft":"lsft", "shiftright":"rsft", "controlleft":"lctl", "controlright":"rctl", "metaleft":"lmeta", "metaright":"rmeta", "altleft":"lalt", "altright":"ralt", "period":"dot", "quote":"apostrophe", "bracketleft":"leftbracket", "bracketright":"rightbracket", "delete":"del", "insert":"ins", "pageup":"pgup", "pagedown":"pgdn", "arrowleft":"lft", "arrowright":"rght", "arrowup":"up", "arrowdown":"down", "printscreen":"ssrq", "sysrq":"ssrq", "scrolllock":"slck", "contextmenu":"menu"}
         var target = aliases[lower] || lower
         for (var i = 0; i < studio.keys.length; ++i) {
             var candidate = String(studio.keys[i]).toLowerCase()
@@ -79,6 +79,14 @@ ApplicationWindow {
         for (var i = 0; i < studio.keys.length; ++i)
             if (!drawn[i]) hidden.push(i)
         return hidden
+    }
+    function keyboardSummary() {
+        var info = studio.layoutInfo
+        var id = ["de", "us", "gb"].indexOf(info.choice) >= 0 ? info.choice : (info.id || "de")
+        var geometry = Keyboard.displayGeometry(info)
+        var names = {de:window.tr("Deutsch"), us:window.tr("Englisch US"), gb:window.tr("Englisch UK")}
+        var device = info.keyboard ? (info.keyboard.type === "built-in" ? window.tr("Integrierte Tastatur") : window.tr("Externe Tastatur")) : (info.source || window.tr("Tastatur"))
+        return (info.keyboard && info.keyboard.name ? info.keyboard.name : device) + " · " + names[id] + " · " + geometry.toUpperCase() + (window.usesFullSizeGeometry ? " · 100%" : "")
     }
     function actionLineText(text) {
         if (uiLanguage !== "en") return text
@@ -643,14 +651,7 @@ ApplicationWindow {
                             Layout.maximumWidth: 270
                             Layout.fillWidth: true
                             Layout.alignment: Qt.AlignRight
-                            text: {
-                                var info = studio.layoutInfo
-                                var id = ["de", "us", "gb"].indexOf(info.choice) >= 0 ? info.choice : (info.id || "de")
-                                var geometry = Keyboard.displayGeometry(info)
-                                var names = {de:window.tr("Deutsch"), us:window.tr("Englisch US"), gb:window.tr("Englisch UK")}
-                                var device = info.keyboard ? (info.keyboard.type === "built-in" ? window.tr("Integrierte Tastatur") : window.tr("Externe Tastatur")) : (info.source || window.tr("Tastatur"))
-                                return (info.keyboard && info.keyboard.name ? info.keyboard.name : device) + " · " + names[id] + " · " + geometry.toUpperCase() + (window.usesFullSizeGeometry ? " · 100%" : "")
-                            }
+                            text: window.keyboardSummary()
                             color: window.muted; font.pixelSize: 10; horizontalAlignment: Text.AlignRight; elide: Text.ElideRight
                         }
                     }
@@ -913,6 +914,93 @@ ApplicationWindow {
                 Rectangle { width: 7; height: 7; radius: 4; color: studio.statusError ? window.red : window.green }
                 Text { text: window.tr(studio.status); color: window.fg; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
                 Text { text: studio.previewActive ? window.tr("TEST") + " · " + studio.previewRemaining + " S" : studio.dirty || window.pendingEdit ? window.tr("UNGESPEICHERTER ENTWURF") : window.tr("GESPEICHERT"); color: studio.previewActive || studio.dirty || window.pendingEdit ? window.accent : window.muted; font.pixelSize: 10; font.weight: Font.Bold; font.letterSpacing: 1 }
+            }
+        }
+    }
+
+    // First run: no config is open. Asks before creating one and shows what Kanata Studio needs.
+    Rectangle {
+        id: firstRun
+        objectName: "firstRun"
+        anchors.fill: parent
+        anchors.topMargin: 67
+        anchors.bottomMargin: 44
+        visible: studio.path === ""
+        color: window.bg
+        property var setup: ({})
+        function refresh() { setup = studio.setupStatus() }
+        onVisibleChanged: if (visible) refresh()
+        Component.onCompleted: if (visible) refresh()
+        readonly property var rows: window.keyRows.map(function(row) { return row.map(function(key) { return key[0] }).filter(function(name) { return name !== "" }) }).filter(function(row) { return row.length > 0 })
+        MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; hoverEnabled: true; onWheel: function(wheel) { wheel.accepted = true } }
+        Rectangle {
+            anchors.centerIn: parent
+            width: Math.min(620, parent.width - 48)
+            height: setupColumn.implicitHeight + 56
+            radius: 7
+            color: window.surface
+            border.color: Qt.alpha(window.fg, 0.14)
+            ColumnLayout {
+                id: setupColumn
+                anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                anchors.margins: 28
+                spacing: 12
+                Text { text: window.tr("ERSTER START"); color: window.muted; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 1.8 }
+                Text {
+                    Layout.fillWidth: true
+                    text: window.tr(firstRun.setup.configExists ? "Die Konfiguration konnte nicht geöffnet werden" : "Keine Kanata-Konfiguration gefunden")
+                    color: window.fg; font.pixelSize: 20; font.weight: Font.DemiBold; wrapMode: Text.WordWrap
+                }
+                Text {
+                    Layout.fillWidth: true
+                    visible: !firstRun.setup.configExists
+                    text: window.tr("Kanata Studio kann eine neue Konfiguration anlegen. Sie enthält alle Tasten der erkannten Tastatur, jede mit ihrer normalen Funktion. Belegungen änderst du danach im Editor.")
+                    color: window.fg; font.pixelSize: 13; wrapMode: Text.WordWrap; lineHeight: 1.2
+                }
+                Text {
+                    Layout.fillWidth: true
+                    visible: firstRun.setup.configExists === true
+                    text: window.tr(studio.status)
+                    color: window.red; font.pixelSize: 13; wrapMode: Text.WordWrap
+                }
+                Text { Layout.fillWidth: true; text: window.tr("Datei: ") + (firstRun.setup.configPath || ""); color: window.muted; font.pixelSize: 12; wrapMode: Text.WrapAnywhere }
+                Rectangle { Layout.fillWidth: true; height: 1; color: Qt.alpha(window.fg, 0.12) }
+                Repeater {
+                    model: [
+                        {ok: !!firstRun.setup.kanata, label: firstRun.setup.kanata ? window.tr("Kanata gefunden: ") + firstRun.setup.kanata : window.tr("Kanata nicht gefunden · nötig zum Prüfen, Speichern und Testen")},
+                        {ok: !!firstRun.setup.service, label: window.tr(firstRun.setup.service ? "kanata.service eingerichtet" : "kanata.service nicht eingerichtet · nötig zum Speichern und Testen")},
+                        {ok: firstRun.rows.length > 0, label: firstRun.rows.length > 0 ? window.tr("Tastatur erkannt: ") + window.keyboardSummary() : window.tr("Keine Tastatur erkannt")}
+                    ]
+                    delegate: RowLayout {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        spacing: 10
+                        Rectangle { width: 7; height: 7; radius: 4; color: modelData.ok ? window.green : window.changeColor }
+                        Text { Layout.fillWidth: true; text: modelData.label; color: window.fg; font.pixelSize: 12; wrapMode: Text.WrapAnywhere }
+                    }
+                }
+                Text {
+                    Layout.fillWidth: true
+                    visible: !firstRun.setup.kanata && !firstRun.setup.configExists
+                    text: window.tr("Ohne Kanata wird die neue Datei ohne Kanata-Prüfung angelegt.")
+                    color: window.muted; font.pixelSize: 12; wrapMode: Text.WordWrap
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: 6
+                    spacing: 8
+                    FlatButton {
+                        objectName: "createConfigButton"
+                        visible: !firstRun.setup.configExists
+                        enabled: firstRun.rows.length > 0 && !studio.busy
+                        emphasized: true
+                        text: window.tr("Neue Konfiguration anlegen")
+                        onClicked: if (studio.createConfig(firstRun.rows)) editorPanel.sync(); else firstRun.refresh()
+                    }
+                    FlatButton { text: window.tr("Andere Datei öffnen"); onClicked: fileDialog.open() }
+                    Item { Layout.fillWidth: true }
+                    FlatButton { text: window.tr("Erneut prüfen"); onClicked: firstRun.refresh() }
+                }
             }
         }
     }

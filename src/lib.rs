@@ -6,6 +6,7 @@ pub mod plugin;
 pub mod protocol;
 pub mod runtime;
 pub mod session;
+pub mod starter;
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use editor::{Edit, Editor, Request};
@@ -75,6 +76,11 @@ enum Command {
     },
     Parse {
         source: String,
+    },
+    CreateConfig {
+        path: PathBuf,
+        rows: Vec<Vec<String>>,
+        binary: Option<String>,
     },
     /// Any other `op` is an edit and is parsed as [`Request`].
     #[serde(other)]
@@ -169,6 +175,10 @@ pub fn dispatch(editor: &mut Editor, input: &str) -> Result<serde_json::Value, S
                 key.unwrap_or(session.key.unwrap_or(0)),
             )?;
             return Ok(json!({"ok":true, "details":actions::details(&source, node)}));
+        }
+        Command::CreateConfig { path, rows, binary } => {
+            let source = starter::create(&path, &rows, binary.as_deref())?;
+            return Ok(json!({"ok": true, "source": source}));
         }
         Command::Parse { source } => {
             let forms = parser::parse(&source)?;
