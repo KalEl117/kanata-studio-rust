@@ -435,6 +435,10 @@ int main(int argc, char *argv[]) {
             studio.selectLayer(1); studio.selectKey(1);
             if (auto *panel = engine.rootObjects().first()->findChild<QObject *>("editorPanel")) QMetaObject::invokeMethod(panel, "sync");
         }
+        if (screenshotView == "first-run-create") {
+            if (auto *button = engine.rootObjects().first()->findChild<QObject *>("createConfigButton"))
+                QMetaObject::invokeMethod(button, "clicked");
+        }
         if (screenshotView == "config") {
             if (auto *dialog = engine.rootObjects().first()->findChild<QObject *>("configDialog"))
                 QMetaObject::invokeMethod(dialog, "open");

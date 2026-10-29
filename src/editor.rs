@@ -242,6 +242,9 @@ pub(crate) fn normalized(key: &str) -> String {
         "arrowright" => "rght",
         "arrowup" => "up",
         "arrowdown" => "down",
+        "printscreen" | "sysrq" => "ssrq",
+        "scrolllock" => "slck",
+        "contextmenu" => "menu",
         _ => return lower,
     }
     .into()

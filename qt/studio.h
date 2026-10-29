@@ -105,6 +105,9 @@ public:
     Q_INVOKABLE bool cancelPreview();
     Q_INVOKABLE void discard();
     Q_INVOKABLE void report(const QString &message);
+    // First run: where a new config would go and what is missing for check/save/test.
+    Q_INVOKABLE QVariantMap setupStatus() const;
+    Q_INVOKABLE bool createConfig(const QVariantList &rows);
 signals:
     void changed();
     void documentChanged();
@@ -131,6 +134,8 @@ private:
     QString effectiveLayout() const;
     QString runtimeLauncher() const;
     static bool serviceUsesOpenFile(const QString &path, QString &error);
+    static QString serviceProperty(const QString &property, bool *ok = nullptr);
+    static QString defaultConfigPath();
     void updatePreview();
     void detectKeyboardLayout();
     void setStatus(const QString &message, bool error = false);

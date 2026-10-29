@@ -157,7 +157,7 @@ cd kanata-studio-rust
 ./run.sh
 ```
 
-Optional eine `.kbd`-Datei angeben. Ohne Argument wird `~/.config/kanata/kanata.kbd` oder `config.kbd` geöffnet. Es wird keine neue Konfiguration erzeugt. `run.sh` startet die vorhandene ausführbare Datei direkt; es baut nur beim ersten Start oder nach Änderungen an Quellcode, Build-Dateien oder QML. `./build.sh` erzwingt die Build-Prüfung. Die Abhängigkeiten werden dabei aus `Cargo.lock` offline verwendet.
+Optional eine `.kbd`-Datei angeben. Ohne Argument wird `~/.config/kanata/kanata.kbd`, `config.kbd` oder die von `kanata.service` verwendete Datei geöffnet. Gibt es keine, fragt ein Startbildschirm, ob eine Konfiguration angelegt werden soll: alle Tasten der erkannten Tastatur in `defsrc` und eine Basisebene, in der jede Taste ihre normale Funktion behält (`_`). Ist Kanata installiert, prüft es die Datei vorher; eine vorhandene Datei wird nie ersetzt. Der Startbildschirm zeigt außerdem, ob Kanata und `kanata.service` gefunden wurden, die zum Prüfen, Speichern und Testen nötig sind. `run.sh` startet die vorhandene ausführbare Datei direkt; es baut nur beim ersten Start oder nach Änderungen an Quellcode, Build-Dateien oder QML. `./build.sh` erzwingt die Build-Prüfung. Die Abhängigkeiten werden dabei aus `Cargo.lock` offline verwendet.
 
 ```sh
 ./package.sh                         # Debian mit deb-src: Release-Paket samt Quellen

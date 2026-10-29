@@ -36,7 +36,11 @@ Studio::Studio(QObject *parent) : QObject(parent), m_rustEditor(ks_editor_new())
     const QString dir = QDir::homePath() + "/.config/kanata/";
     const QString preferred = dir + "kanata.kbd";
     const QString alternate = dir + "config.kbd";
-    open(QFile::exists(preferred) ? preferred : QFile::exists(alternate) ? alternate : preferred);
+    const QString service = QFile::exists(preferred) || QFile::exists(alternate) ? QString() : defaultConfigPath();
+    if (QFile::exists(preferred) || QFile::exists(alternate) || QFile::exists(service))
+        open(QFile::exists(preferred) ? preferred : QFile::exists(alternate) ? alternate : service);
+    else
+        setStatus("Keine Kanata-Konfiguration gefunden");
     m_environmentTimer.setInterval(2500);
     connect(&m_environmentTimer, &QTimer::timeout, this, [this] { detectKeyboardLayout(); });
     m_environmentTimer.start();
@@ -280,17 +284,50 @@ QString Studio::serviceConfigPath(const QString &execStart) {
     return match.captured(1).isEmpty() ? match.captured(2) : match.captured(1);
 }
 
-bool Studio::serviceUsesOpenFile(const QString &path, QString &error) {
+// One `systemctl --user show kanata.service` property; `ok` is false if systemctl failed.
+QString Studio::serviceProperty(const QString &property, bool *ok) {
+    if (ok) *ok = false;
     QProcess process;
     QProcessEnvironment native = QProcessEnvironment::systemEnvironment();
     if (native.contains("KANATA_STUDIO_SYSTEM_LD_LIBRARY_PATH")) native.insert("LD_LIBRARY_PATH", native.value("KANATA_STUDIO_SYSTEM_LD_LIBRARY_PATH"));
     process.setProcessEnvironment(native);
-    process.start("systemctl", {"--user", "show", "kanata.service", "--property=ExecStart", "--value"});
+    process.start("systemctl", {"--user", "show", "kanata.service", "--property=" + property, "--value"});
     if (!process.waitForStarted(3000) || !process.waitForFinished(5000)
-        || process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
-        error = "kanata.service konnte nicht gelesen werden"; return false;
-    }
-    QString servicePath = serviceConfigPath(QString::fromUtf8(process.readAllStandardOutput()));
+        || process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) return {};
+    if (ok) *ok = true;
+    return QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+}
+
+// The file kanata.service runs, if it names one; otherwise ~/.config/kanata/kanata.kbd.
+QString Studio::defaultConfigPath() {
+    QString path = serviceConfigPath(serviceProperty("ExecStart"));
+    path.replace("%h", QDir::homePath());
+    return path.isEmpty() ? QDir::homePath() + "/.config/kanata/kanata.kbd" : path;
+}
+
+QVariantMap Studio::setupStatus() const {
+    const QString path = defaultConfigPath();
+    return {{"configPath", path}, {"configExists", QFileInfo::exists(path)},
+            {"kanata", kanataBinary()}, {"service", serviceProperty("LoadState") == "loaded"}};
+}
+
+bool Studio::createConfig(const QVariantList &rows) {
+    if (busy() || m_previewActive) { setStatus("Bitte warten, bis der laufende Vorgang abgeschlossen ist", true); return false; }
+    const QString path = defaultConfigPath();
+    QJsonArray keyRows;
+    for (const QVariant &row : rows) keyRows.append(QJsonArray::fromStringList(row.toStringList()));
+    const QJsonObject result = rustRequest({{"op", "createConfig"}, {"path", path}, {"rows", keyRows}, {"binary", kanataBinary()}});
+    if (!result.value("ok").toBool()) { setStatus(result.value("error").toString(), true); return false; }
+    if (!open(path)) return false;
+    setStatus("Neue Konfiguration angelegt: " + path);
+    return true;
+}
+
+bool Studio::serviceUsesOpenFile(const QString &path, QString &error) {
+    bool read = false;
+    const QString execStart = serviceProperty("ExecStart", &read);
+    if (!read) { error = "kanata.service konnte nicht gelesen werden"; return false; }
+    QString servicePath = serviceConfigPath(execStart);
     if (servicePath.isEmpty()) { error = "Konfigurationspfad von kanata.service ist unbekannt"; return false; }
     servicePath.replace("%h", QDir::homePath());
     if (QFileInfo(servicePath).canonicalFilePath() != QFileInfo(path).canonicalFilePath()) {
