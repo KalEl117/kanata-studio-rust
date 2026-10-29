@@ -108,6 +108,9 @@ public:
     // First run: where a new config would go and what is missing for check/save/test.
     Q_INVOKABLE QVariantMap setupStatus() const;
     Q_INVOKABLE bool createConfig(const QVariantList &rows);
+    // kanata.service: status, missing permissions with the root commands, and creating the unit.
+    Q_INVOKABLE QVariantMap kanataSetup() const;
+    Q_INVOKABLE bool createService();
 signals:
     void changed();
     void documentChanged();

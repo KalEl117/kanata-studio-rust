@@ -138,11 +138,14 @@ pub fn command(program: &str, args: &[&str], timeout: Duration) -> Result<String
     }
 }
 
+/// Kanata has no signal-based reload (SIGUSR1 terminates it, and a unit with
+/// `ExecReload=kill -USR1` only recovers through `Restart=` after `RestartSec`), so the
+/// service is restarted. This works for any unit, with or without `ExecReload`.
 fn reload() -> Result<(), String> {
     command(
         "systemctl",
-        &["--user", "reload", "kanata.service"],
-        Duration::from_secs(10),
+        &["--user", "restart", "kanata.service"],
+        Duration::from_secs(15),
     )
     .map(|_| ())
 }

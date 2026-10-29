@@ -51,13 +51,27 @@ davon bitte weder verwenden noch weitergeben. Siehe [LICENSING.md](LICENSING.md)
 
 ### Was zusätzlich für Kanata nötig ist
 
-Die App und das Plugin installieren weder Kanata noch einen Tastaturdienst
-und übertragen keine persönliche Tastaturbelegung. Zum Prüfen, Speichern und
-Live-Testen benötigt die App Kanata sowie einen eingerichteten
-**systemd-Benutzerdienst `kanata.service`**, der die geöffnete Konfiguration
-verwendet. Ein ausschließlich systemweiter Kanata-Dienst genügt dem aktuellen
-Dienstmodell nicht. Ein automatischer Kanata-/Berechtigungsassistent ist noch
-nicht enthalten.
+Die App und das Plugin installieren Kanata nicht und übertragen keine
+persönliche Tastaturbelegung. Zum Prüfen, Speichern und Live-Testen benötigt die
+App Kanata sowie einen **systemd-Benutzerdienst `kanata.service`**, der die
+geöffnete Konfiguration verwendet. Ein ausschließlich systemweiter Kanata-Dienst
+genügt nicht.
+
+Fehlt der Dienst, zeigt die App einen Hinweis, der **Kanata einrichten** öffnet.
+Der Dialog:
+
+- legt den Benutzerdienst `~/.config/systemd/user/kanata.service` für die
+  geöffnete Konfiguration an und aktiviert ihn (ohne Root-Rechte). Ein
+  vorhandener Dienst wird nie ersetzt; gestartet wird er nur, wenn Kanata bereits
+  Zugriff auf die Geräte hat;
+- prüft, ob Kanata `/dev/input` lesen und `/dev/uinput` beschreiben darf. Wenn
+  nicht, listet er die Root-Befehle aus der Kanata-Anleitung zum Kopieren auf
+  (Gruppe `uinput`, Gruppenmitgliedschaft, Modul `uinput`, udev-Regel). Kanata
+  Studio führt diese Befehle nie selbst aus. Danach einmal ab- und wieder
+  anmelden, damit neue Gruppen gelten.
+
+Kanata beendet sich bei `SIGUSR1`. Nach Speichern und Testen startet die App den
+Dienst deshalb mit `systemctl --user restart` neu, statt ihn neu zu laden.
 
 Das Omarchy-Plugin öffnet standardmäßig `~/.config/kanata/kanata.kbd`, ersatzweise
 `~/.config/kanata/config.kbd`. Details: [Plugin-Anleitung](omarchy-plugin/README.md).
@@ -206,7 +220,7 @@ Mit `deflayermap` definierte Ebenen erscheinen in Dateireihenfolge zusammen mit 
 
 ## Speichern und Testmodus
 
-Prüfen verwendet eine temporäre Datei im Konfigurationsverzeichnis und begrenzt die Laufzeit des Kanata-Prozesses. Speichern schreibt atomar mit den bisherigen Dateirechten. Externe Änderungen werden erkannt; schlägt das Dienstneuladen fehl, wird die ursprüngliche Datei wiederhergestellt.
+Prüfen verwendet eine temporäre Datei im Konfigurationsverzeichnis und begrenzt die Laufzeit des Kanata-Prozesses. Speichern schreibt atomar mit den bisherigen Dateirechten. Externe Änderungen werden erkannt; schlägt der Neustart des Dienstes fehl, wird die ursprüngliche Datei wiederhergestellt.
 
 Der 30-Sekunden-Test läuft in einem eigenen Prozess. Ablauf, Abbruch und Wiederherstellung nach einer Unterbrechung liegen in Rust. `kanata-studio-rust-recover.service` verwendet `~/.local/state/kanata-studio-rust/preview`, läuft vor `kanata.service` und startet den Launcher mit `--recover-preview`. Die Diensteinrichtung wird nur bei Änderungen oder einer vorherigen unvollständigen Einrichtung wiederholt. Auf unterbrochene Tests wird bei jedem normalen Start geprüft.
 

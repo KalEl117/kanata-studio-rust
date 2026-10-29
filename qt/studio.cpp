@@ -323,6 +323,22 @@ bool Studio::createConfig(const QVariantList &rows) {
     return true;
 }
 
+QVariantMap Studio::kanataSetup() const {
+    QVariantMap status = rustRequest({{"op", "kanataSetup"}}).toVariantMap();
+    status.insert("kanata", kanataBinary());
+    status.insert("configPath", m_path);
+    return status;
+}
+
+bool Studio::createService() {
+    if (busy() || m_previewActive) { setStatus("Bitte warten, bis der laufende Vorgang abgeschlossen ist", true); return false; }
+    const QJsonObject result = rustRequest({{"op", "createService"}, {"binary", kanataBinary()}, {"config", m_path}});
+    if (!result.value("ok").toBool()) { setStatus(result.value("error").toString(), true); return false; }
+    setStatus(result.value("started").toBool() ? "kanata.service eingerichtet und gestartet"
+                                               : "kanata.service eingerichtet · startet, sobald die Rechte gesetzt sind");
+    return true;
+}
+
 bool Studio::serviceUsesOpenFile(const QString &path, QString &error) {
     bool read = false;
     const QString execStart = serviceProperty("ExecStart", &read);

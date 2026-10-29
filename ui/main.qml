@@ -80,6 +80,10 @@ ApplicationWindow {
             if (!drawn[i]) hidden.push(i)
         return hidden
     }
+    // kanata.service and device permissions; refreshed at start and after the setup dialog.
+    property var kanataStatus: ({})
+    function refreshKanataStatus() { kanataStatus = studio.kanataSetup() }
+    Component.onCompleted: refreshKanataStatus()
     function keyboardSummary() {
         var info = studio.layoutInfo
         var id = ["de", "us", "gb"].indexOf(info.choice) >= 0 ? info.choice : (info.id || "de")
@@ -268,6 +272,94 @@ ApplicationWindow {
                 configDialog.open()
                 configFormBox.currentIndex = studio.configForms.length - 1
                 configFormText.text = studio.configForms[configFormBox.currentIndex].expression
+            }
+        }
+    }
+    StudioDialog {
+        id: setupDialog
+        objectName: "setupDialog"
+        title: window.tr("Kanata einrichten")
+        width: Math.min(720, Overlay.overlay.width - 40)
+        onOpened: window.refreshKanataStatus()
+        onClosed: window.refreshKanataStatus()
+        footer: Rectangle {
+            implicitHeight: 54
+            color: window.surface
+            RowLayout {
+                anchors.fill: parent
+                anchors.margins: 8
+                spacing: 8
+                FlatButton { text: window.tr("Erneut prüfen"); onClicked: window.refreshKanataStatus() }
+                Item { Layout.fillWidth: true }
+                FlatButton { Layout.preferredWidth: 120; text: window.tr("Schließen"); onClicked: setupDialog.close() }
+            }
+        }
+        contentItem: ColumnLayout {
+            spacing: 10
+            Repeater {
+                model: [
+                    {ok: !!window.kanataStatus.kanata, label: window.kanataStatus.kanata ? window.tr("Kanata gefunden: ") + window.kanataStatus.kanata : window.tr("Kanata nicht gefunden · bitte zuerst installieren (github.com/jtroo/kanata)")},
+                    {ok: !!window.kanataStatus.configPath, label: window.kanataStatus.configPath ? window.tr("Konfiguration: ") + window.kanataStatus.configPath : window.tr("Keine Konfiguration geöffnet")},
+                    {ok: window.kanataStatus.service === true, label: window.tr(window.kanataStatus.service ? "kanata.service eingerichtet" : "kanata.service nicht eingerichtet")},
+                    {ok: window.kanataStatus.inputReadable === true, label: window.tr(window.kanataStatus.inputReadable ? "Eingabegeräte lesbar (/dev/input)" : "Eingabegeräte nicht lesbar (/dev/input)")},
+                    {ok: window.kanataStatus.uinputWritable === true, label: window.tr(window.kanataStatus.uinputWritable ? "Virtuelle Tastatur erlaubt (/dev/uinput)" : "Virtuelle Tastatur nicht erlaubt (/dev/uinput)")}
+                ]
+                delegate: RowLayout {
+                    required property var modelData
+                    Layout.fillWidth: true
+                    spacing: 10
+                    Rectangle { width: 7; height: 7; radius: 4; color: modelData.ok ? window.green : window.changeColor }
+                    Text { Layout.fillWidth: true; text: modelData.label; color: window.fg; font.pixelSize: 12; wrapMode: Text.WrapAnywhere }
+                }
+            }
+            FlatButton {
+                objectName: "createServiceButton"
+                visible: window.kanataStatus.service === false
+                enabled: !!window.kanataStatus.kanata && !!window.kanataStatus.configPath && !studio.busy
+                emphasized: true
+                text: window.tr("kanata.service anlegen")
+                onClicked: { studio.createService(); window.refreshKanataStatus() }
+            }
+            Text {
+                Layout.fillWidth: true
+                visible: window.kanataStatus.service === false
+                text: window.tr("Legt einen Benutzerdienst an, der Kanata mit dieser Konfiguration beim Anmelden startet. Dafür sind keine Root-Rechte nötig.")
+                color: window.muted; font.pixelSize: 11; wrapMode: Text.WordWrap
+            }
+            ColumnLayout {
+                Layout.fillWidth: true
+                visible: (window.kanataStatus.commands || []).length > 0
+                spacing: 8
+                Rectangle { Layout.fillWidth: true; height: 1; color: Qt.alpha(window.fg, 0.12) }
+                Text {
+                    Layout.fillWidth: true
+                    text: window.tr("Kanata braucht Zugriff auf die Eingabegeräte. Diese Befehle benötigen Root-Rechte; Kanata Studio führt sie nicht selbst aus. Bitte im Terminal ausführen:")
+                    color: window.fg; font.pixelSize: 12; wrapMode: Text.WordWrap
+                }
+                TextArea {
+                    id: setupCommands
+                    objectName: "setupCommands"
+                    Layout.fillWidth: true
+                    readOnly: true
+                    selectByMouse: true
+                    wrapMode: TextEdit.WrapAnywhere
+                    text: (window.kanataStatus.commands || []).join("\n")
+                    color: window.fg
+                    font.family: "monospace"
+                    font.pixelSize: 12
+                    background: Rectangle { color: window.bg; radius: 5; border.color: Qt.alpha(window.fg, 0.15) }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Text {
+                        Layout.fillWidth: true
+                        visible: window.kanataStatus.relogin === true
+                        text: window.tr("Danach einmal ab- und wieder anmelden, damit die Gruppen gelten.")
+                        color: window.muted; font.pixelSize: 11; wrapMode: Text.WordWrap
+                    }
+                    Item { Layout.fillWidth: true; visible: window.kanataStatus.relogin !== true }
+                    FlatButton { text: window.tr("Befehle kopieren"); onClicked: { setupCommands.selectAll(); setupCommands.copy(); setupCommands.deselect() } }
+                }
             }
         }
     }
@@ -528,6 +620,26 @@ ApplicationWindow {
                     width: parent.width
                     spacing: 24
                     Item { Layout.preferredHeight: 6 }
+                    Rectangle {
+                        objectName: "serviceBanner"
+                        visible: studio.path !== "" && window.kanataStatus.service === false
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 28
+                        Layout.rightMargin: 28
+                        implicitHeight: bannerRow.implicitHeight + 20
+                        radius: 7
+                        color: Qt.alpha(window.changeColor, 0.08)
+                        border.color: Qt.alpha(window.changeColor, 0.45)
+                        RowLayout {
+                            id: bannerRow
+                            anchors.fill: parent
+                            anchors.margins: 10
+                            anchors.leftMargin: 16
+                            spacing: 12
+                            Text { Layout.fillWidth: true; text: window.tr("kanata.service ist nicht eingerichtet. Ohne den Dienst kann Kanata Studio nicht speichern und nicht testen."); color: window.fg; font.pixelSize: 12; wrapMode: Text.WordWrap }
+                            FlatButton { text: window.tr("Kanata einrichten …"); onClicked: setupDialog.open() }
+                        }
+                    }
                     GridLayout {
                         Layout.fillWidth: true
                         Layout.leftMargin: 28
@@ -998,6 +1110,7 @@ ApplicationWindow {
                         onClicked: if (studio.createConfig(firstRun.rows)) editorPanel.sync(); else firstRun.refresh()
                     }
                     FlatButton { text: window.tr("Andere Datei öffnen"); onClicked: fileDialog.open() }
+                    FlatButton { visible: firstRun.setup.service === false; text: window.tr("Kanata einrichten …"); onClicked: setupDialog.open() }
                     Item { Layout.fillWidth: true }
                     FlatButton { text: window.tr("Erneut prüfen"); onClicked: firstRun.refresh() }
                 }

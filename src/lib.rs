@@ -6,6 +6,7 @@ pub mod plugin;
 pub mod protocol;
 pub mod runtime;
 pub mod session;
+pub mod setup;
 pub mod starter;
 
 use base64::{Engine, engine::general_purpose::STANDARD};
@@ -81,6 +82,11 @@ enum Command {
         path: PathBuf,
         rows: Vec<Vec<String>>,
         binary: Option<String>,
+    },
+    KanataSetup,
+    CreateService {
+        binary: String,
+        config: PathBuf,
     },
     /// Any other `op` is an edit and is parsed as [`Request`].
     #[serde(other)]
@@ -179,6 +185,10 @@ pub fn dispatch(editor: &mut Editor, input: &str) -> Result<serde_json::Value, S
         Command::CreateConfig { path, rows, binary } => {
             let source = starter::create(&path, &rows, binary.as_deref())?;
             return Ok(json!({"ok": true, "source": source}));
+        }
+        Command::KanataSetup => return Ok(setup::status()),
+        Command::CreateService { binary, config } => {
+            return setup::create_service(&binary, &config);
         }
         Command::Parse { source } => {
             let forms = parser::parse(&source)?;

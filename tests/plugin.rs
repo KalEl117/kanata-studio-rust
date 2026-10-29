@@ -76,7 +76,7 @@ fn popup_drafts_survive_restart_and_save_validates_conflicts_and_reload_failure(
     );
     script(
         &root.0.join("bin/systemctl"),
-        "#!/bin/sh\ncase \"$*\" in\n*ExecStart*) printf '{ argv[]=/bin/kanata -c \"%s\" ; }\\n' \"$TEST_CONFIG\" ;;\n*reload*) if [ -f \"$TEST_ROOT/reload-fail\" ]; then exit 1; fi; printf reload >> \"$TEST_ROOT/reloads\" ;;\nesac\n",
+        "#!/bin/sh\ncase \"$*\" in\n*ExecStart*) printf '{ argv[]=/bin/kanata -c \"%s\" ; }\\n' \"$TEST_CONFIG\" ;;\n*restart*) if [ -f \"$TEST_ROOT/reload-fail\" ]; then exit 1; fi; printf reload >> \"$TEST_ROOT/reloads\" ;;\nesac\n",
     );
     let open = json!({"op":"pluginOpen","path":config,"layoutInfo":{"id":"de"}});
     let mut client = Client::start(&root.0, &config);

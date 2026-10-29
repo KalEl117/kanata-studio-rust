@@ -435,6 +435,19 @@ int main(int argc, char *argv[]) {
             studio.selectLayer(1); studio.selectKey(1);
             if (auto *panel = engine.rootObjects().first()->findChild<QObject *>("editorPanel")) QMetaObject::invokeMethod(panel, "sync");
         }
+        if (screenshotView == "kanata-setup" || screenshotView == "kanata-setup-sample") {
+            QObject *root = engine.rootObjects().first();
+            if (auto *dialog = root->findChild<QObject *>("setupDialog")) QMetaObject::invokeMethod(dialog, "open");
+            // A machine without permissions, so the command list can be checked on any desktop.
+            if (screenshotView == "kanata-setup-sample")
+                QTimer::singleShot(700, root, [root] {
+                    root->setProperty("kanataStatus", QVariantMap{{"kanata", "/usr/bin/kanata"}, {"configPath", "/home/user/.config/kanata/kanata.kbd"},
+                        {"service", false}, {"inputReadable", false}, {"uinputWritable", false}, {"relogin", true},
+                        {"commands", QStringList{"sudo groupadd --system uinput", "sudo usermod -aG input,uinput \"$USER\"",
+                            "echo 'KERNEL==\"uinput\", MODE=\"0660\", GROUP=\"uinput\", OPTIONS+=\"static_node=uinput\"' | sudo tee /etc/udev/rules.d/99-input.rules",
+                            "sudo udevadm control --reload-rules && sudo udevadm trigger"}}});
+                });
+        }
         if (screenshotView == "first-run-create") {
             if (auto *button = engine.rootObjects().first()->findChild<QObject *>("createConfigButton"))
                 QMetaObject::invokeMethod(button, "clicked");

@@ -36,7 +36,7 @@ impl Fixture {
         fs::write(
             &script,
             r#"#!/bin/sh
-printf 'reload\n' >> "$KANATA_TEST_DIR/calls"
+printf '%s\n' "$*" >> "$KANATA_TEST_DIR/calls"
 printf '%s' "${LD_LIBRARY_PATH-unset}" > "$KANATA_TEST_DIR/library-path"
 if [ "$KANATA_TEST_FAIL" = once ] && [ ! -e "$KANATA_TEST_DIR/failed" ]; then
   touch "$KANATA_TEST_DIR/failed"
@@ -141,6 +141,13 @@ fn save_reloads_service_and_rolls_back_on_reload_failure() {
     assert!(!ok, "{error}");
     assert_eq!(fs::read(&fixture.config).unwrap(), b"original");
     assert_eq!(fixture.calls(), 2);
+    // Kanata exits on SIGUSR1, so the service is restarted rather than reloaded.
+    assert!(
+        fs::read_to_string(fixture.dir.join("calls"))
+            .unwrap()
+            .lines()
+            .all(|call| call == "--user restart kanata.service")
+    );
     assert_eq!(
         fs::read_to_string(fixture.dir.join("library-path")).unwrap(),
         "unset"
