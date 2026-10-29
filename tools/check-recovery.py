@@ -78,11 +78,14 @@ exit 0
             assert report["state"]["phase"] == "reverted"
             assert not (preview / "request.json").exists()
             assert config.stat().st_mode & 0o777 == 0o640
-            first_calls = log.read_text()
+            # Read-only `systemctl show` queries (e.g. which file kanata.service runs) may repeat;
+            # anything that sets up or changes units must not.
+            changes = lambda: [line for line in log.read_text().splitlines() if " show " not in f" {line} "]
+            first_calls = changes()
             second = subprocess.run([str(BINARY), "--startup-check", str(config)], env=env,
                                     text=True, capture_output=True, timeout=15)
             assert second.returncode == 0, second.stderr
-            assert log.read_text() == first_calls, "Folgestart richtet den Dienst erneut ein"
+            assert changes() == first_calls, "Folgestart richtet den Dienst erneut ein"
         return "externe Änderungen erhalten" if external else "Original und Editor nach SIGKILL wiederhergestellt"
 
 for external in (False, True):
