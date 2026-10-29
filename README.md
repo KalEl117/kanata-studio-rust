@@ -50,12 +50,24 @@ or redistribute copies of them. See [LICENSING.md](LICENSING.md).
 
 ### Set up Kanata separately
 
-The app and plugin do not install Kanata, configure keyboard permissions, set up
-a keyboard service, or transfer your personal keymap. To validate, save, and
-live-test configurations, you need Kanata and a configured **systemd user service
-named `kanata.service`** that uses the configuration file you open in the editor.
-The current service integration does not support a system-wide Kanata service
-on its own. An automatic Kanata and permissions setup wizard is not included.
+The app and plugin do not install Kanata or transfer your personal keymap. To
+validate, save, and live-test configurations, you need Kanata and a **systemd user
+service named `kanata.service`** that uses the configuration file you open in the
+editor. A system-wide Kanata service alone is not supported.
+
+If the service is missing, the app shows a hint that opens **Set up Kanata**. This
+dialog:
+
+- creates and enables the user unit `~/.config/systemd/user/kanata.service` for
+  the open configuration (no root needed). It never replaces an existing unit and
+  starts the service only when Kanata already has device access;
+- checks whether Kanata can read `/dev/input` and write `/dev/uinput`. If not, it
+  lists the root commands from the Kanata setup guide (`uinput` group, group
+  membership, `uinput` module, udev rule) to copy. Kanata Studio never runs
+  these commands itself. Log out and back in afterwards so new groups apply.
+
+Kanata exits on `SIGUSR1`, so after saving or testing the app restarts the
+service with `systemctl --user restart` instead of reloading it.
 
 The Omarchy plugin opens `~/.config/kanata/kanata.kbd` by default, falling back to
 `~/.config/kanata/config.kbd`. See the [plugin guide](omarchy-plugin/README.md).
@@ -279,7 +291,7 @@ keys only add an entry to a map layer when they get an action there.
 
 Validation uses a temporary file in the configuration directory and limits the
 Kanata process runtime. Saving writes atomically with the original permissions.
-External changes are detected; if reloading the service fails, the original file
+External changes are detected; if restarting the service fails, the original file
 is restored.
 
 The 30-second test runs in a separate process. Rust handles expiry, cancellation,
