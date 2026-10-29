@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "zoltan.kanata-studio",
   "name": "Kanata Studio",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "author": "Zoltan",
   "description": "Kanata-Status und Zugang zu Kanata Studio Rust; Grundlage für den integrierten Editor.",
   "kinds": ["bar-widget"],
