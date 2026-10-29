@@ -11,12 +11,27 @@
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QSaveFile>
+#ifdef Q_OS_WIN
+#include <QSettings>
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#else
 #include <signal.h>
+#endif
 
 namespace {
 QString fileName(const QString &name) { return Preview::directory() + '/' + name; }
 bool secureDirectory() {
     if (!QDir().mkpath(Preview::directory())) return false;
+#ifdef Q_OS_WIN
+    // %LOCALAPPDATA% is already private to the user; Qt maps permissions only to the read-only flag.
+    return true;
+#endif
     return QFile::setPermissions(Preview::directory(), QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner);
 }
 QJsonObject readJson(const QString &name) {
@@ -44,19 +59,53 @@ void finish(const QString &phase, const QString &message = {}) {
     if (phase == "reverted") QFile::remove(fileName("request.json"));
     QFile::remove(fileName("cancel"));
 }
+#ifdef Q_OS_WIN
+// Minutes since the epoch at boot, as the Rust worker records it; may differ by one minute.
+QString bootId() { return QString::number((QDateTime::currentMSecsSinceEpoch() - static_cast<qint64>(GetTickCount64())) / 60000); }
+bool sameBoot(const QString &recorded) { return qAbs(recorded.toLongLong() - bootId().toLongLong()) <= 1; }
+#else
 QString bootId() { return QString::fromUtf8(readBytes("/proc/sys/kernel/random/boot_id")).trimmed(); }
-bool isAlive(qint64 pid) { return pid > 0 && ::kill(static_cast<pid_t>(pid), 0) == 0; }
+bool sameBoot(const QString &recorded) { return recorded == bootId(); }
+#endif
 }
 
 namespace Preview {
 QString directory() {
     const QString testDirectory = qEnvironmentVariable("KANATA_STUDIO_QT_PREVIEW_DIR");
-    return testDirectory.isEmpty() ? QDir::homePath() + "/.local/state/kanata-studio-rust/preview" : testDirectory;
+    if (!testDirectory.isEmpty()) return testDirectory;
+#ifdef Q_OS_WIN
+    return QDir::fromNativeSeparators(qEnvironmentVariable("LOCALAPPDATA")) + "/kanata-studio-rust/preview";
+#else
+    return QDir::homePath() + "/.local/state/kanata-studio-rust/preview";
+#endif
+}
+
+bool processAlive(qint64 pid) {
+    if (pid <= 0) return false;
+#ifdef Q_OS_WIN
+    HANDLE process = OpenProcess(SYNCHRONIZE, FALSE, static_cast<DWORD>(pid));
+    if (!process) return false;
+    const bool alive = WaitForSingleObject(process, 0) == WAIT_TIMEOUT;
+    CloseHandle(process);
+    return alive;
+#else
+    return ::kill(static_cast<pid_t>(pid), 0) == 0;
+#endif
 }
 QVariantMap state() { return readJson("state.json").toVariantMap(); }
 
 bool ensureRecoveryUnit(const QString &binary, QString &error) {
     if (!secureDirectory()) { error = "Vorschauverzeichnis kann nicht geschützt werden"; return false; }
+#ifdef Q_OS_WIN
+    // The user's Run key restores an interrupted test at login, like the systemd unit on Linux.
+    QSettings run("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", QSettings::NativeFormat);
+    const QString command = '"' + QDir::toNativeSeparators(binary) + "\" --recover-preview";
+    if (run.value("KanataStudioRecover").toString() != command) {
+        run.setValue("KanataStudioRecover", command);
+        run.sync();
+        if (run.status() != QSettings::NoError) { error = "Wiederherstellungsdienst kann nicht geschrieben werden"; return false; }
+    }
+#else
     const QString unitDir = qEnvironmentVariable("KANATA_STUDIO_UNIT_DIR", QDir::homePath() + "/.config/systemd/user");
     if (!QDir().mkpath(unitDir)) { error = "Wiederherstellungsdienst kann nicht angelegt werden"; return false; }
     const QString unitPath = unitDir + "/kanata-studio-rust-recover.service";
@@ -105,10 +154,10 @@ bool ensureRecoveryUnit(const QString &binary, QString &error) {
             error = "Dienstbereitschaft konnte nicht gespeichert werden"; return false;
         }
     }
+#endif
     const QJsonObject status = readJson("state.json");
     if (status.value("phase") == "testing") {
-        const bool sameBoot = status.value("bootId").toString() == bootId();
-        if (sameBoot && isAlive(static_cast<qint64>(status.value("pid").toDouble()))) return true;
+        if (sameBoot(status.value("bootId").toString()) && processAlive(static_cast<qint64>(status.value("pid").toDouble()))) return true;
     }
     if ((status.value("phase") == "testing" || status.value("phase") == "pending" || status.value("phase") == "error")
         && !readJson("request.json").isEmpty()) {

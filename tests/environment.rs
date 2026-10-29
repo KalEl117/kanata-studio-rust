@@ -206,6 +206,7 @@ fn configured_filters_determine_the_editor_target_and_display_is_read_only() {
     assert!(environment::firmware_keyboard("My QMK Keyboard"));
 }
 
+#[cfg(unix)]
 #[test]
 fn preferences_migrate_and_persist_without_touching_other_user_settings() {
     use std::{

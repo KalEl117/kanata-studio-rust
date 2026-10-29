@@ -1,11 +1,10 @@
-//! Linux file/service operations. The preview worker runs independently of the GUI.
+//! File and Kanata service operations (systemd on Linux, a managed process on Windows). The preview worker runs independently of the GUI.
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde::Deserialize;
 use serde_json::json;
 use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
-    os::unix::fs::{OpenOptionsExt, PermissionsExt},
     path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::atomic::{AtomicU64, Ordering},
@@ -28,12 +27,11 @@ impl Temporary {
                 ".kanata-studio-rust-{}-{sequence}.kbd",
                 std::process::id()
             ));
-            match OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .mode(0o600)
-                .open(&path)
-            {
+            let mut options = OpenOptions::new();
+            options.write(true).create_new(true);
+            #[cfg(unix)]
+            std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+            match options.open(&path) {
                 Ok(file) => return Ok(Self { path, file }),
                 Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
                 Err(error) => return Err(error.to_string()),
@@ -60,16 +58,44 @@ fn plain_file(path: &Path) -> Result<(), String> {
 pub fn atomic_write(path: &Path, bytes: &[u8], mode: u32) -> Result<(), String> {
     let parent = path.parent().ok_or("Datei hat kein Elternverzeichnis")?;
     let mut temp = Temporary::create(parent)?;
+    #[cfg(unix)]
     temp.file
-        .set_permissions(fs::Permissions::from_mode(mode))
+        .set_permissions(std::os::unix::fs::PermissionsExt::from_mode(mode))
         .map_err(|e| e.to_string())?;
+    #[cfg(not(unix))]
+    let _ = mode;
     temp.file.write_all(bytes).map_err(|e| e.to_string())?;
     temp.file.sync_all().map_err(|e| e.to_string())?;
     fs::rename(&temp.path, path).map_err(|e| e.to_string())?;
+    // Windows cannot open directories as files; NTFS journals the rename itself.
+    #[cfg(unix)]
     File::open(parent)
         .and_then(|dir| dir.sync_all())
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Unix permission bits to keep on rewrite; Windows keeps the directory's inherited ACL.
+fn file_mode(path: &Path) -> Result<u32, String> {
+    let meta = fs::metadata(path).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    return Ok(std::os::unix::fs::PermissionsExt::mode(&meta.permissions()));
+    #[cfg(not(unix))]
+    {
+        let _ = meta;
+        Ok(0o600)
+    }
+}
+
+/// Identifies the current boot so a stale test state is not mistaken for a live one.
+pub fn boot_id() -> String {
+    #[cfg(windows)]
+    return crate::windows::boot_id();
+    #[cfg(not(windows))]
+    fs::read_to_string("/proc/sys/kernel/random/boot_id")
+        .unwrap_or_default()
+        .trim()
+        .into()
 }
 
 /// Drain pipes concurrently so verbose command output cannot block the child.
@@ -81,6 +107,12 @@ pub fn command(program: &str, args: &[&str], timeout: Duration) -> Result<String
         } else {
             process.env("LD_LIBRARY_PATH", native_path);
         }
+    }
+    #[cfg(windows)]
+    {
+        // A GUI app must not flash a console window for every helper it runs.
+        use std::os::windows::process::CommandExt;
+        process.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     }
     let mut child = process
         .args(args)
@@ -141,6 +173,7 @@ pub fn command(program: &str, args: &[&str], timeout: Duration) -> Result<String
 /// Kanata has no signal-based reload (SIGUSR1 terminates it, and a unit with
 /// `ExecReload=kill -USR1` only recovers through `Restart=` after `RestartSec`), so the
 /// service is restarted. This works for any unit, with or without `ExecReload`.
+#[cfg(not(windows))]
 fn reload() -> Result<(), String> {
     command(
         "systemctl",
@@ -148,6 +181,11 @@ fn reload() -> Result<(), String> {
         Duration::from_secs(15),
     )
     .map(|_| ())
+}
+
+#[cfg(windows)]
+fn reload() -> Result<(), String> {
+    crate::windows::restart_kanata()
 }
 
 pub fn check(binary: &str, path: &Path, source: &str) -> Result<(), String> {
@@ -167,10 +205,7 @@ pub fn save(path: &Path, original: &[u8], candidate: &[u8]) -> Result<(), String
     if current != original {
         return Err("Datei wurde extern geändert · bitte neu öffnen".into());
     }
-    let mode = fs::metadata(path)
-        .map_err(|e| e.to_string())?
-        .permissions()
-        .mode();
+    let mode = file_mode(path)?;
     // Keep the rollback path active even if syncing the parent directory fails after rename.
     let result = atomic_write(path, candidate, mode).and_then(|_| reload());
     if let Err(error) = result {
@@ -238,10 +273,7 @@ fn restore(
     if current != original && current != candidate {
         return Err("Datei wurde extern geändert; Wiederherstellung gestoppt".into());
     }
-    let mode = fs::metadata(&request.config_path)
-        .map_err(|e| e.to_string())?
-        .permissions()
-        .mode();
+    let mode = file_mode(&request.config_path)?;
     if current != original {
         atomic_write(&request.config_path, original, mode)?;
     }
@@ -278,16 +310,13 @@ pub fn worker(directory: &Path, recover: bool) -> Result<(), String> {
             return state(directory, "reverted", None);
         }
         let status = json!({"phase":"testing", "pid":std::process::id(), "deadline":request.deadline,
-            "bootId":fs::read_to_string("/proc/sys/kernel/random/boot_id").unwrap_or_default().trim()});
+            "bootId":boot_id()});
         atomic_write(
             &directory.join("state.json"),
             status.to_string().as_bytes(),
             0o600,
         )?;
-        let mode = fs::metadata(&request.config_path)
-            .map_err(|e| e.to_string())?
-            .permissions()
-            .mode();
+        let mode = file_mode(&request.config_path)?;
         if let Err(error) =
             atomic_write(&request.config_path, &candidate, mode).and_then(|_| reload())
         {

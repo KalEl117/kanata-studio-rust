@@ -18,10 +18,18 @@
 #include <QJsonObject>
 #include <QtConcurrent/QtConcurrentRun>
 #include <algorithm>
-#include <signal.h>
 #include <functional>
 
 static QByteArray digest(const QByteArray &data) { return QCryptographicHash::hash(data, QCryptographicHash::Sha256); }
+
+// Where Kanata itself looks for kanata.kbd.
+static QString kanataConfigDir() {
+#ifdef Q_OS_WIN
+    return QDir::fromNativeSeparators(qEnvironmentVariable("APPDATA")) + "/kanata/";
+#else
+    return QDir::homePath() + "/.config/kanata/";
+#endif
+}
 
 Studio::Studio(QObject *parent) : QObject(parent), m_rustEditor(ks_editor_new()) {
     connect(&m_environmentWatcher, &QFutureWatcher<QJsonObject>::finished, this, [this] {
@@ -33,7 +41,7 @@ Studio::Studio(QObject *parent) : QObject(parent), m_rustEditor(ks_editor_new())
     applyEnvironment(rustRequest({{"op", "environment"}}));
     m_previewTimer.setInterval(250);
     connect(&m_previewTimer, &QTimer::timeout, this, &Studio::updatePreview);
-    const QString dir = QDir::homePath() + "/.config/kanata/";
+    const QString dir = kanataConfigDir();
     const QString preferred = dir + "kanata.kbd";
     const QString alternate = dir + "config.kbd";
     const QString service = QFile::exists(preferred) || QFile::exists(alternate) ? QString() : defaultConfigPath();
@@ -273,8 +281,23 @@ bool Studio::deleteLayer(int layer) {
 }
 
 QString Studio::kanataBinary() const {
+#ifdef Q_OS_WIN
+    // Next to Kanata Studio, in %LOCALAPPDATA%\kanata, then on PATH. Kanata's GUI builds
+    // print nothing for --check, so only console builds are used.
+    const QStringList names{"kanata", "kanata_winIOv2", "kanata_windows_tty_winIOv2_x64"};
+    const QStringList preferred{QCoreApplication::applicationDirPath(),
+                                QDir::fromNativeSeparators(qEnvironmentVariable("LOCALAPPDATA")) + "/kanata"};
+    for (const QStringList &paths : {preferred, QStringList{}}) {
+        for (const QString &name : names) {
+            const QString found = QStandardPaths::findExecutable(name, paths);
+            if (!found.isEmpty()) return QDir::toNativeSeparators(found);
+        }
+    }
+    return {};
+#else
     const QString local = QDir::homePath() + "/.local/bin/kanata";
     return QFileInfo(local).isExecutable() ? local : QStandardPaths::findExecutable("kanata");
+#endif
 }
 
 QString Studio::serviceConfigPath(const QString &execStart) {
@@ -287,6 +310,18 @@ QString Studio::serviceConfigPath(const QString &execStart) {
 // One `systemctl --user show kanata.service` property; `ok` is false if systemctl failed.
 QString Studio::serviceProperty(const QString &property, bool *ok) {
     if (ok) *ok = false;
+#ifdef Q_OS_WIN
+    // Windows has no systemd; the Rust core reads the autostart entry that stands in for the unit.
+    void *editor = ks_editor_new();
+    char *response = ks_editor_request(editor, R"({"op":"kanataService"})");
+    const QJsonObject result = response ? QJsonDocument::fromJson(QByteArray(response)).object() : QJsonObject{};
+    ks_string_free(response); ks_editor_free(editor);
+    if (!result.value("ok").toBool()) return {};
+    if (ok) *ok = true;
+    const QJsonValue command = result.value("command");
+    if (property == "LoadState") return command.isString() ? "loaded" : "not-found";
+    return command.toString();
+#endif
     QProcess process;
     QProcessEnvironment native = QProcessEnvironment::systemEnvironment();
     if (native.contains("KANATA_STUDIO_SYSTEM_LD_LIBRARY_PATH")) native.insert("LD_LIBRARY_PATH", native.value("KANATA_STUDIO_SYSTEM_LD_LIBRARY_PATH"));
@@ -302,7 +337,7 @@ QString Studio::serviceProperty(const QString &property, bool *ok) {
 QString Studio::defaultConfigPath() {
     QString path = serviceConfigPath(serviceProperty("ExecStart"));
     path.replace("%h", QDir::homePath());
-    return path.isEmpty() ? QDir::homePath() + "/.config/kanata/kanata.kbd" : path;
+    return path.isEmpty() ? kanataConfigDir() + "kanata.kbd" : QDir::fromNativeSeparators(path);
 }
 
 QVariantMap Studio::setupStatus() const {
@@ -332,8 +367,13 @@ QVariantMap Studio::kanataSetup() const {
 
 bool Studio::createService() {
     if (busy() || m_previewActive) { setStatus("Bitte warten, bis der laufende Vorgang abgeschlossen ist", true); return false; }
-    const QJsonObject result = rustRequest({{"op", "createService"}, {"binary", kanataBinary()}, {"config", m_path}});
+    const QJsonObject result = rustRequest({{"op", "createService"}, {"binary", kanataBinary()}, {"config", m_path},
+                                           {"launcher", QDir::toNativeSeparators(runtimeLauncher())}});
     if (!result.value("ok").toBool()) { setStatus(result.value("error").toString(), true); return false; }
+#ifdef Q_OS_WIN
+    setStatus("Kanata-Autostart eingerichtet und Kanata gestartet");
+    return true;
+#endif
     setStatus(result.value("started").toBool() ? "kanata.service eingerichtet und gestartet"
                                                : "kanata.service eingerichtet · startet, sobald die Rechte gesetzt sind");
     return true;
@@ -342,12 +382,17 @@ bool Studio::createService() {
 bool Studio::serviceUsesOpenFile(const QString &path, QString &error) {
     bool read = false;
     const QString execStart = serviceProperty("ExecStart", &read);
-    if (!read) { error = "kanata.service konnte nicht gelesen werden"; return false; }
+#ifdef Q_OS_WIN
+    const QString service = "Kanata-Autostart";
+#else
+    const QString service = "kanata.service";
+#endif
+    if (!read) { error = service + " konnte nicht gelesen werden"; return false; }
     QString servicePath = serviceConfigPath(execStart);
-    if (servicePath.isEmpty()) { error = "Konfigurationspfad von kanata.service ist unbekannt"; return false; }
+    if (servicePath.isEmpty()) { error = "Konfigurationspfad von " + service + " ist unbekannt"; return false; }
     servicePath.replace("%h", QDir::homePath());
     if (QFileInfo(servicePath).canonicalFilePath() != QFileInfo(path).canonicalFilePath()) {
-        error = "Diese Datei wird von kanata.service nicht verwendet"; return false;
+        error = "Diese Datei wird von " + service + " nicht verwendet"; return false;
     }
     return true;
 }
@@ -481,7 +526,7 @@ void Studio::updatePreview() {
         const qint64 deadline = current.value("deadline").toLongLong();
         m_previewRemaining = deadline > 0 ? qMax(0, static_cast<int>((deadline - QDateTime::currentMSecsSinceEpoch() + 999) / 1000)) : 30;
         const qint64 pid = current.value("pid").toLongLong();
-        if (phase == "testing" && pid > 0 && ::kill(static_cast<pid_t>(pid), 0) != 0 && !m_previewRecoveryStarted) {
+        if (phase == "testing" && pid > 0 && !Preview::processAlive(pid) && !m_previewRecoveryStarted) {
             m_previewRecoveryStarted = QProcess::startDetached(runtimeLauncher(), {"--recover-preview"});
             if (m_previewRecoveryStarted) setStatus("Testprozess wurde unterbrochen · Wiederherstellung läuft", true);
         }

@@ -1,11 +1,17 @@
-//! Kanata service setup. Kanata Studio writes and enables the user unit (no root needed); the
-//! device permissions need root, so it only reports them and lists the commands for the user.
+//! Kanata service setup. On Linux Kanata Studio writes and enables the user unit (no root
+//! needed); the device permissions need root, so it only reports them and lists the commands
+//! for the user. On Windows the service is an autostart entry and no permissions are needed.
+#[cfg(unix)]
 use crate::runtime::command;
 use serde_json::{Value, json};
+#[cfg(unix)]
 use std::fs::{self, File, OpenOptions};
+#[cfg(unix)]
 use std::io::Write;
+#[cfg(unix)]
 use std::os::unix::fs::{FileTypeExt, MetadataExt};
 use std::path::{Path, PathBuf};
+#[cfg(unix)]
 use std::time::Duration;
 
 const UDEV_RULE: &str =
@@ -88,6 +94,7 @@ pub fn group_entry(groups: &str, group: &str) -> Option<(u32, Vec<String>)> {
     })
 }
 
+#[cfg(unix)]
 fn user() -> String {
     std::env::var("USER")
         .ok()
@@ -96,7 +103,24 @@ fn user() -> String {
         .unwrap_or_default()
 }
 
+/// Kanata's Windows hook needs no device permissions.
+#[cfg(windows)]
+pub fn permissions() -> Permissions {
+    Permissions {
+        input_readable: true,
+        uinput_exists: true,
+        uinput_writable: true,
+        uinput_rule: true,
+        uinput_group_exists: true,
+        in_input: true,
+        in_uinput: true,
+        session_input: true,
+        session_uinput: true,
+    }
+}
+
 /// Inspects the real system. Opens devices only to test access and closes them at once.
+#[cfg(unix)]
 pub fn permissions() -> Permissions {
     let groups = fs::read_to_string("/etc/group").unwrap_or_default();
     let user = user();
@@ -134,15 +158,24 @@ pub fn permissions() -> Permissions {
 }
 
 pub fn unit_path() -> PathBuf {
-    if let Some(directory) = std::env::var_os("KANATA_STUDIO_UNIT_DIR") {
-        return PathBuf::from(directory).join("kanata.service");
+    #[cfg(windows)]
+    return PathBuf::from(format!(
+        r"HKCU\{}\{}",
+        crate::windows::RUN_KEY,
+        crate::windows::KANATA_VALUE
+    ));
+    #[cfg(not(windows))]
+    {
+        if let Some(directory) = std::env::var_os("KANATA_STUDIO_UNIT_DIR") {
+            return PathBuf::from(directory).join("kanata.service");
+        }
+        std::env::var_os("XDG_CONFIG_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".config")
+            })
+            .join("systemd/user/kanata.service")
     }
-    std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".config")
-        })
-        .join("systemd/user/kanata.service")
 }
 
 /// One ExecStart argument: quoted, with systemd's `%` specifiers and `$` expansion disabled.
@@ -173,21 +206,42 @@ pub fn unit_text(binary: &str, config: &str) -> String {
     )
 }
 
+#[cfg(unix)]
 fn systemctl(args: &[&str]) -> Result<String, String> {
     let mut all = vec!["--user"];
     all.extend_from_slice(args);
     command("systemctl", &all, Duration::from_secs(15))
 }
 
+#[cfg(unix)]
 pub fn service_loaded() -> bool {
     systemctl(&["show", "kanata.service", "--property=LoadState", "--value"])
         .is_ok_and(|state| state == "loaded")
+}
+
+#[cfg(windows)]
+pub fn service_loaded() -> bool {
+    service_command().is_ok_and(|command| command.is_some())
+}
+
+/// The command line that starts Kanata: the autostart entry on Windows, ExecStart on Linux.
+pub fn service_command() -> Result<Option<String>, String> {
+    #[cfg(windows)]
+    return crate::windows::run_value(crate::windows::KANATA_VALUE);
+    #[cfg(unix)]
+    {
+        if !service_loaded() {
+            return Ok(None);
+        }
+        systemctl(&["show", "kanata.service", "--property=ExecStart", "--value"]).map(Some)
+    }
 }
 
 pub fn status() -> Value {
     let permissions = permissions();
     json!({
         "ok": true,
+        "platform": std::env::consts::OS,
         "service": service_loaded(),
         "unitPath": unit_path(),
         "ready": permissions.ready(),
@@ -198,9 +252,14 @@ pub fn status() -> Value {
     })
 }
 
-/// Writes and enables the user unit; never replaces an existing unit. Starts it only when
-/// Kanata already has the device permissions, otherwise it would fail at once.
-pub fn create_service(binary: &str, config: &Path) -> Result<Value, String> {
+/// Writes and enables the user unit (Windows: the autostart entry, started through
+/// `launcher`); never replaces an existing one. Starts it only when Kanata already has the
+/// device permissions, otherwise it would fail at once.
+pub fn create_service(
+    binary: &str,
+    config: &Path,
+    launcher: Option<&str>,
+) -> Result<Value, String> {
     if binary.is_empty() {
         return Err("Kanata wurde nicht gefunden".into());
     }
@@ -208,17 +267,49 @@ pub fn create_service(binary: &str, config: &Path) -> Result<Value, String> {
         return Err("Bitte zuerst eine Konfiguration anlegen oder öffnen".into());
     }
     if service_loaded() {
-        return Err("kanata.service ist bereits eingerichtet".into());
+        return Err(if cfg!(windows) {
+            "Kanata-Autostart ist bereits eingerichtet"
+        } else {
+            "kanata.service ist bereits eingerichtet"
+        }
+        .into());
     }
     let path = unit_path();
     let config = config.canonicalize().map_err(|e| e.to_string())?;
+    #[cfg(windows)]
+    {
+        // canonicalize() yields a \\?\ verbatim path, which Kanata and the Run key do not need.
+        let config = config.to_string_lossy();
+        let config = config.strip_prefix(r"\\?\").unwrap_or(&config);
+        let launcher = launcher
+            .filter(|l| !l.is_empty())
+            .ok_or("Kanata Studio wurde nicht gefunden")?;
+        crate::windows::set_run_value(
+            crate::windows::KANATA_VALUE,
+            &crate::windows::autostart_command(launcher, binary, config),
+        )?;
+        crate::windows::start_kanata(binary, config)
+            .map_err(|e| format!("Autostart eingerichtet, aber Kanata startet nicht: {e}"))?;
+        Ok(json!({"ok": true, "unitPath": path, "started": true}))
+    }
+    #[cfg(unix)]
+    create_unit(binary, &config, &path, launcher)
+}
+
+#[cfg(unix)]
+fn create_unit(
+    binary: &str,
+    config: &Path,
+    path: &Path,
+    _launcher: Option<&str>,
+) -> Result<Value, String> {
     let text = unit_text(binary, &config.to_string_lossy());
     fs::create_dir_all(path.parent().ok_or("Ungültiger Dienstpfad")?)
         .map_err(|e| format!("Ordner kann nicht angelegt werden: {e}"))?;
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)
-        .open(&path)
+        .open(path)
         .map_err(|e| format!("kanata.service kann nicht angelegt werden: {e}"))?;
     file.write_all(text.as_bytes())
         .and_then(|_| file.sync_all())

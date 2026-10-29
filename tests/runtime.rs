@@ -1,3 +1,6 @@
+// These tests drive Linux-only behaviour (systemctl) through shell scripts.
+#![cfg(unix)]
+
 use base64::{Engine, engine::general_purpose::STANDARD};
 use kanata_studio_core::runtime;
 use serde_json::{Value, json};

@@ -1,5 +1,6 @@
 #include "studio.h"
 #include "preview.h"
+#include "rust_core.h"
 #include <QCoreApplication>
 #include <QGuiApplication>
 #include <QDir>
@@ -44,6 +45,21 @@ int main(int argc, char *argv[]) {
         if (mode == "--preview-worker" || mode == "--recover-preview") {
             QCoreApplication app(argc, argv);
             return Preview::runWorker(mode == "--recover-preview");
+        }
+        // Windows autostart entry: `--start-kanata <kanata> -c <config>` runs Kanata without a console.
+        if (mode == "--start-kanata") {
+            QCoreApplication app(argc, argv);
+            const QStringList arguments = app.arguments();
+            if (arguments.size() != 5 || arguments[3] != "-c") return 2;
+            const QByteArray request = QJsonDocument(QJsonObject{{"op", "startKanata"}, {"binary", arguments[2]},
+                                                                 {"config", arguments[4]}}).toJson(QJsonDocument::Compact);
+            void *editor = ks_editor_new();
+            char *response = ks_editor_request(editor, request.constData());
+            const QJsonObject result = response ? QJsonDocument::fromJson(QByteArray(response)).object() : QJsonObject{};
+            if (!result.value("ok").toBool()) std::fprintf(stderr, "%s\n", qPrintable(result.value("error").toString()));
+            ks_string_free(response);
+            ks_editor_free(editor);
+            return result.value("ok").toBool() ? 0 : 1;
         }
     }
     QGuiApplication app(argc, argv);

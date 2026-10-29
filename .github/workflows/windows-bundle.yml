@@ -1,0 +1,120 @@
+name: Portable Windows bundle
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    env:
+      # license_materials.py and the packager read UTF-8 license and QML files.
+      PYTHONUTF8: '1'
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: clippy
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: win64_msvc2022_64
+          cache: true
+      - name: Test Rust core
+        run: |
+          cargo fetch --locked
+          python tools/license_materials.py
+          cargo test --locked --offline
+          cargo clippy --locked --offline --all-targets -- -D warnings
+      - name: Build
+        run: |
+          cargo build --release --locked --offline
+          python tools/prepare-ui.py
+          Push-Location qt
+          qmake kanata-studio-rust.pro "CONFIG+=release" "CONFIG-=debug_and_release"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          nmake
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Pop-Location
+      - name: Package
+        run: python tools/package-windows.py
+      - name: Verify checksum and launch the unpacked bundle
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: |
+          $archive = Get-ChildItem dist -Filter 'kanata-studio-rust-*-windows-x86_64.zip' | Select-Object -First 1
+          $expected = (Get-Content "$($archive.FullName).sha256").Split(' ')[0]
+          if ((Get-FileHash $archive.FullName -Algorithm SHA256).Hash.ToLower() -ne $expected) { throw 'Prüfsumme stimmt nicht' }
+          Expand-Archive $archive.FullName -DestinationPath smoke
+          $bundle = Get-ChildItem smoke -Directory | Select-Object -First 1
+          $exe = Join-Path $bundle.FullName 'kanata-studio-rust.exe'
+          $test = Join-Path $bundle.FullName 'share\test.kbd'
+          # The app is a GUI-subsystem program; Start-Process -Wait collects its exit code.
+          foreach ($arguments in @(@('--display-check'), @('--screenshot', "$PWD\studio.png", $test), @('--ui-check', $test))) {
+            $process = Start-Process $exe -ArgumentList $arguments -Wait -PassThru -NoNewWindow
+            if ($process.ExitCode) { throw "kanata-studio-rust ${arguments}: Exitcode $($process.ExitCode)" }
+          }
+          if (-not (Test-Path studio.png) -or (Get-Item studio.png).Length -eq 0) { throw 'Kein Screenshot' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86_64
+          path: |
+            dist/kanata-studio-rust-*-windows-x86_64.zip
+            dist/kanata-studio-rust-*-windows-x86_64.zip.sha256
+            studio.png
+          if-no-files-found: error
+
+  release-draft:
+    # Tags only: attach the tested archive to the draft release the Linux workflow also fills.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-x86_64
+          path: bundle
+      - name: Check tag, version and assets
+        run: |
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')
+          test "$TAG" = "v$version" || { echo "Tag $TAG passt nicht zu Cargo.toml ($version)"; exit 1; }
+          rm -f bundle/studio.png
+          cd bundle
+          sha256sum -c *.sha256
+          ls kanata-studio-rust-$version-windows-x86_64.zip
+      - name: Create or update draft release
+        run: |
+          if state=$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null); then
+            test "$state" = true || { echo "Release $TAG ist bereits veröffentlicht; Dateien bleiben unverändert"; exit 1; }
+            gh release upload "$TAG" bundle/* --clobber
+          else
+            notes=docs/release-notes/$TAG.md
+            if [ -f "$notes" ]; then set -- --notes-file "$notes"; else set -- --generate-notes; fi
+            gh release create "$TAG" bundle/* --draft --verify-tag --title "$TAG" "$@"
+          fi

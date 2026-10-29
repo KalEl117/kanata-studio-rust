@@ -81,6 +81,8 @@ ApplicationWindow {
         return hidden
     }
     // kanata.service and device permissions; refreshed at start and after the setup dialog.
+    // On Windows an autostart entry replaces the service and no device permissions are needed.
+    readonly property bool windowsHost: Qt.platform.os === "windows"
     property var kanataStatus: ({})
     function refreshKanataStatus() { kanataStatus = studio.kanataSetup() }
     Component.onCompleted: refreshKanataStatus()
@@ -300,10 +302,12 @@ ApplicationWindow {
                 model: [
                     {ok: !!window.kanataStatus.kanata, label: window.kanataStatus.kanata ? window.tr("Kanata gefunden: ") + window.kanataStatus.kanata : window.tr("Kanata nicht gefunden · bitte zuerst installieren (github.com/jtroo/kanata)")},
                     {ok: !!window.kanataStatus.configPath, label: window.kanataStatus.configPath ? window.tr("Konfiguration: ") + window.kanataStatus.configPath : window.tr("Keine Konfiguration geöffnet")},
-                    {ok: window.kanataStatus.service === true, label: window.tr(window.kanataStatus.service ? "kanata.service eingerichtet" : "kanata.service nicht eingerichtet")},
-                    {ok: window.kanataStatus.inputReadable === true, label: window.tr(window.kanataStatus.inputReadable ? "Eingabegeräte lesbar (/dev/input)" : "Eingabegeräte nicht lesbar (/dev/input)")},
-                    {ok: window.kanataStatus.uinputWritable === true, label: window.tr(window.kanataStatus.uinputWritable ? "Virtuelle Tastatur erlaubt (/dev/uinput)" : "Virtuelle Tastatur nicht erlaubt (/dev/uinput)")}
-                ]
+                    {ok: window.kanataStatus.service === true, label: window.windowsHost
+                        ? window.tr(window.kanataStatus.service ? "Kanata-Autostart eingerichtet" : "Kanata-Autostart nicht eingerichtet")
+                        : window.tr(window.kanataStatus.service ? "kanata.service eingerichtet" : "kanata.service nicht eingerichtet")},
+                    {linux: true, ok: window.kanataStatus.inputReadable === true, label: window.tr(window.kanataStatus.inputReadable ? "Eingabegeräte lesbar (/dev/input)" : "Eingabegeräte nicht lesbar (/dev/input)")},
+                    {linux: true, ok: window.kanataStatus.uinputWritable === true, label: window.tr(window.kanataStatus.uinputWritable ? "Virtuelle Tastatur erlaubt (/dev/uinput)" : "Virtuelle Tastatur nicht erlaubt (/dev/uinput)")}
+                ].filter(row => !(row.linux && window.windowsHost))
                 delegate: RowLayout {
                     required property var modelData
                     Layout.fillWidth: true
@@ -317,13 +321,15 @@ ApplicationWindow {
                 visible: window.kanataStatus.service === false
                 enabled: !!window.kanataStatus.kanata && !!window.kanataStatus.configPath && !studio.busy
                 emphasized: true
-                text: window.tr("kanata.service anlegen")
+                text: window.tr(window.windowsHost ? "Kanata-Autostart einrichten" : "kanata.service anlegen")
                 onClicked: { studio.createService(); window.refreshKanataStatus() }
             }
             Text {
                 Layout.fillWidth: true
                 visible: window.kanataStatus.service === false
-                text: window.tr("Legt einen Benutzerdienst an, der Kanata mit dieser Konfiguration beim Anmelden startet. Dafür sind keine Root-Rechte nötig.")
+                text: window.tr(window.windowsHost
+                    ? "Startet Kanata mit dieser Konfiguration jetzt und bei jeder Anmeldung, ohne Konsolenfenster. Dafür sind keine Administratorrechte nötig."
+                    : "Legt einen Benutzerdienst an, der Kanata mit dieser Konfiguration beim Anmelden startet. Dafür sind keine Root-Rechte nötig.")
                 color: window.muted; font.pixelSize: 11; wrapMode: Text.WordWrap
             }
             ColumnLayout {
@@ -636,7 +642,7 @@ ApplicationWindow {
                             anchors.margins: 10
                             anchors.leftMargin: 16
                             spacing: 12
-                            Text { Layout.fillWidth: true; text: window.tr("kanata.service ist nicht eingerichtet. Ohne den Dienst kann Kanata Studio nicht speichern und nicht testen."); color: window.fg; font.pixelSize: 12; wrapMode: Text.WordWrap }
+                            Text { Layout.fillWidth: true; text: window.tr(window.windowsHost ? "Kanata-Autostart ist nicht eingerichtet. Ohne ihn kann Kanata Studio nicht speichern und nicht testen." : "kanata.service ist nicht eingerichtet. Ohne den Dienst kann Kanata Studio nicht speichern und nicht testen."); color: window.fg; font.pixelSize: 12; wrapMode: Text.WordWrap }
                             FlatButton { text: window.tr("Kanata einrichten …"); onClicked: setupDialog.open() }
                         }
                     }
@@ -1080,7 +1086,9 @@ ApplicationWindow {
                 Repeater {
                     model: [
                         {ok: !!firstRun.setup.kanata, label: firstRun.setup.kanata ? window.tr("Kanata gefunden: ") + firstRun.setup.kanata : window.tr("Kanata nicht gefunden · nötig zum Prüfen, Speichern und Testen")},
-                        {ok: !!firstRun.setup.service, label: window.tr(firstRun.setup.service ? "kanata.service eingerichtet" : "kanata.service nicht eingerichtet · nötig zum Speichern und Testen")},
+                        {ok: !!firstRun.setup.service, label: window.windowsHost
+                            ? window.tr(firstRun.setup.service ? "Kanata-Autostart eingerichtet" : "Kanata-Autostart nicht eingerichtet · nötig zum Speichern und Testen")
+                            : window.tr(firstRun.setup.service ? "kanata.service eingerichtet" : "kanata.service nicht eingerichtet · nötig zum Speichern und Testen")},
                         {ok: firstRun.rows.length > 0, label: firstRun.rows.length > 0 ? window.tr("Tastatur erkannt: ") + window.keyboardSummary() : window.tr("Keine Tastatur erkannt")}
                     ]
                     delegate: RowLayout {

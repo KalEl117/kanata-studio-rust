@@ -72,6 +72,45 @@ service with `systemctl --user restart` instead of reloading it.
 The Omarchy plugin opens `~/.config/kanata/kanata.kbd` by default, falling back to
 `~/.config/kanata/config.kbd`. See the [plugin guide](omarchy-plugin/README.md).
 
+## Use on Windows
+
+Windows 10/11 (x86_64) gets a portable ZIP,
+`kanata-studio-rust-<version>-windows-x86_64.zip`, containing Qt, QML and the
+MSVC runtime. No installation or administrator rights are needed: extract it and
+run `kanata-studio-rust.exe`.
+
+Kanata is not included ([Kanata releases](https://github.com/jtroo/kanata/releases)).
+Kanata Studio looks for `kanata.exe` (also `kanata_winIOv2.exe`) next to the app,
+in `%LOCALAPPDATA%\kanata`, and on `PATH`. As with Kanata, the configuration
+defaults to `%APPDATA%\kanata\kanata.kbd`.
+
+Windows has no systemd, so **Set up Kanata** creates a per-user autostart entry
+instead of `kanata.service` (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`,
+value `Kanata`). It starts Kanata through Kanata Studio without a console window
+and never replaces an existing entry. After saving and testing, Kanata Studio
+stops the running Kanata and restarts it with the configuration from that entry.
+It cannot stop a Kanata running as administrator; it then reports an error and
+restores the previous file. After moving the folder, set up the autostart again:
+the entry still points to the old `kanata-studio-rust.exe` (delete it in
+`regedit` or in the Windows startup apps settings).
+
+The `KanataStudioRecover` entry restores an interrupted 30-second test at the next
+login. The keyboard layout (German, English US/UK) follows the active Windows input
+language. On Windows Kanata captures all keyboards together, so the app shows one
+generic keyboard whose shape can be chosen in the layout menu.
+
+[Portable Windows bundle](.github/workflows/windows-bundle.yml) builds the ZIP
+with MSVC 2022 and Qt 6.8.3, launches the extracted bundle offscreen, and attaches
+it to the same draft release as the Linux packages for version tags. Locally on
+Windows, in an "x64 Native Tools" prompt with Qt on `PATH`:
+
+```bat
+cargo build --release --locked
+python tools\prepare-ui.py
+cd qt && qmake kanata-studio-rust.pro CONFIG+=release CONFIG-=debug_and_release && nmake && cd ..
+python tools\package-windows.py --development
+```
+
 ## Build packages for other distributions
 
 The [Portable Linux bundle workflow](.github/workflows/linux-bundle.yml) builds

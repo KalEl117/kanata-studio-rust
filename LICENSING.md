@@ -64,6 +64,24 @@ tests. It is not uploaded in the release artifact. Cross-distribution smoke
 tests exercise display detection and QML rendering; full validation and recovery
 tests run in the Debian build job with the upstream validator.
 
+## Windows releases
+
+`.github/workflows/windows-bundle.yml` builds the Windows ZIP against the
+official Qt open-source binaries for MSVC 2022. `tools/package-windows.py` maps
+every deployed `Qt6*.dll` to its Qt submodule (an unreviewed module stops
+packaging) and downloads the **exact upstream source archives** of that Qt
+version from download.qt.io into `sources/qt/`, verified against Qt's published
+MD5 list. `manifest.json` records their URLs and SHA-256 hashes, the Qt version,
+and the project commit. `--development` omits the sources and marks the bundle
+`redistributable: false`; do not publish such bundles.
+
+To use a modified Qt, build it from `sources/qt/` with the same MSVC version
+(see the Qt documentation, "Building Qt Sources"), close the app, and replace
+the matching DLLs, plugin folders and `qml/` in the extracted folder. No signing
+or authorization from this project is required. The MSVC runtime DLLs are
+Microsoft's redistributable files, copied app-locally from the Visual Studio
+`VC\Redist` directory.
+
 ## Existing releases
 
 The app/plugin archives, checksums, and release installers for v0.2.0 and v0.2.1

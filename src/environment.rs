@@ -290,6 +290,22 @@ pub fn layout_for_config(
         "devices":devices, "available":selected.is_some(), "explicitPaths":explicit_paths})
 }
 
+/// Kanata's Windows hook captures every keyboard and Windows names none, so one generic
+/// keyboard stands for all of them; its geometry follows the active layout.
+pub fn with_hooked_keyboard(layout: &mut Value) {
+    if layout["available"] == true {
+        return;
+    }
+    let geometry = if layout["id"] == "us" { "ansi" } else { "iso" };
+    let keyboard = json!({"name":"Tastatur","type":"external","usb":false,"bluetooth":false,
+        "firmware":false,"mouse":false,"path":"","geometry":geometry,"fnAvailable":false,
+        "fullSize":false,"captured":true});
+    layout["keyboard"] = keyboard.clone();
+    layout["devices"] = json!([keyboard]);
+    layout["geometry"] = json!(geometry);
+    layout["available"] = json!(true);
+}
+
 pub fn theme(contents: &str) -> Value {
     let mut result = json!({"background":"#0b0c16","surface":"#151828","chrome":"#080910",
         "foreground":"#ddf7ff","muted":"#6a6e95","accent":"#82fb9c","green":"#82fb9c","red":"#f68b91"});
@@ -319,14 +335,35 @@ pub fn theme(contents: &str) -> Value {
 
 fn home() -> PathBuf {
     std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."))
 }
-fn settings_path() -> PathBuf {
+/// Per-user settings directory: XDG_CONFIG_HOME, on Windows %APPDATA%, else ~/.config.
+pub fn config_home() -> PathBuf {
+    let platform = if cfg!(windows) {
+        std::env::var_os("APPDATA")
+    } else {
+        None
+    };
     std::env::var_os("XDG_CONFIG_HOME")
+        .or(platform)
         .map(PathBuf::from)
         .unwrap_or_else(|| home().join(".config"))
-        .join("kanata-studio-rust/settings.json")
+}
+/// Where Kanata itself looks for kanata.kbd: ~/.config/kanata, on Windows %APPDATA%\kanata.
+pub fn kanata_config_dir() -> PathBuf {
+    if cfg!(windows) {
+        std::env::var_os("APPDATA")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| home().join("AppData/Roaming"))
+            .join("kanata")
+    } else {
+        home().join(".config/kanata")
+    }
+}
+fn settings_path() -> PathBuf {
+    config_home().join("kanata-studio-rust/settings.json")
 }
 pub fn choice_valid(choice: &str) -> bool {
     matches!(
@@ -397,14 +434,24 @@ pub fn discover_for_config(config: Option<&str>) -> Value {
     let default_config = crate::protocol::config_path(&json!({}))
         .ok()
         .and_then(|p| fs::read_to_string(p).ok());
-    let layout = layout_for_config(
+    #[cfg(windows)]
+    let console = format!(
+        "KEYMAP={}",
+        crate::windows::keyboard_layout().unwrap_or_default()
+    );
+    #[cfg(not(windows))]
+    let console = read(Path::new("/etc/vconsole.conf"));
+    #[allow(unused_mut)]
+    let mut layout = layout_for_config(
         &hyprland,
-        &read(Path::new("/etc/vconsole.conf")),
+        &console,
         &read(Path::new("/proc/bus/input/devices")),
         &read(Path::new("/sys/class/dmi/id/product_version")),
         &read_choice(),
         config.or(default_config.as_deref()),
     );
+    #[cfg(windows)]
+    with_hooked_keyboard(&mut layout);
     let palette = read(&home().join(".local/state/omarchy/current/theme/colors.toml"));
     json!({"ok":true,"layout":layout,"theme":theme(&palette)})
 }

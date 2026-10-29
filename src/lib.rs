@@ -8,6 +8,7 @@ pub mod runtime;
 pub mod session;
 pub mod setup;
 pub mod starter;
+pub mod windows;
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use editor::{Edit, Editor, Request};
@@ -84,9 +85,16 @@ enum Command {
         binary: Option<String>,
     },
     KanataSetup,
+    KanataService,
     CreateService {
         binary: String,
         config: PathBuf,
+        launcher: Option<String>,
+    },
+    /// Windows autostart: replaces running Kanata instances with a hidden one.
+    StartKanata {
+        binary: String,
+        config: String,
     },
     /// Any other `op` is an edit and is parsed as [`Request`].
     #[serde(other)]
@@ -187,8 +195,23 @@ pub fn dispatch(editor: &mut Editor, input: &str) -> Result<serde_json::Value, S
             return Ok(json!({"ok": true, "source": source}));
         }
         Command::KanataSetup => return Ok(setup::status()),
-        Command::CreateService { binary, config } => {
-            return setup::create_service(&binary, &config);
+        Command::KanataService => {
+            return Ok(json!({"ok": true, "command": setup::service_command()?}));
+        }
+        Command::CreateService {
+            binary,
+            config,
+            launcher,
+        } => {
+            return setup::create_service(&binary, &config, launcher.as_deref());
+        }
+        Command::StartKanata { binary, config } => {
+            #[cfg(windows)]
+            windows::start_kanata(&binary, &config)?;
+            #[cfg(not(windows))]
+            return Err(format!("{binary} {config}: nur unter Windows verfügbar"));
+            #[cfg(windows)]
+            return Ok(json!({"ok": true}));
         }
         Command::Parse { source } => {
             let forms = parser::parse(&source)?;

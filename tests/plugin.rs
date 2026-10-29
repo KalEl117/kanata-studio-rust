@@ -1,3 +1,6 @@
+// These tests drive Linux-only behaviour (the Omarchy plugin and systemctl) through shell scripts.
+#![cfg(unix)]
+
 use serde_json::{Value, json};
 use std::{
     fs,
