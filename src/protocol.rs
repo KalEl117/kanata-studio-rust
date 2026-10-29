@@ -11,8 +11,7 @@ pub(crate) fn config_path(value: &Value) -> Result<PathBuf, String> {
     let path = if let Some(path) = value["path"].as_str().filter(|p| !p.is_empty()) {
         PathBuf::from(path)
     } else {
-        let directory =
-            PathBuf::from(std::env::var_os("HOME").ok_or("HOME fehlt")?).join(".config/kanata");
+        let directory = crate::environment::kanata_config_dir();
         let primary = directory.join("kanata.kbd");
         if primary.exists() {
             primary

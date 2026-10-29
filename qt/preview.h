@@ -12,4 +12,5 @@ bool start(const QString &binary, const QString &configPath, const QByteArray &o
            const QByteArray &candidate, QString &error, int durationMs = 30000);
 bool cancel(QString &error);
 int runWorker(bool recover);
+bool processAlive(qint64 pid);
 }

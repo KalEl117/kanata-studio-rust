@@ -8,3 +8,8 @@
 /qt/qrc_*
 /qt/kanata-studio-rust
 /reports/
+/qt/Makefile.*
+/qt/*.obj
+/qt/*.exe
+/qt/release/
+/qt/debug/

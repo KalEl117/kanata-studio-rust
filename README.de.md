@@ -76,6 +76,48 @@ Dienst deshalb mit `systemctl --user restart` neu, statt ihn neu zu laden.
 Das Omarchy-Plugin öffnet standardmäßig `~/.config/kanata/kanata.kbd`, ersatzweise
 `~/.config/kanata/config.kbd`. Details: [Plugin-Anleitung](omarchy-plugin/README.md).
 
+## Unter Windows verwenden
+
+Für Windows 10/11 (x86_64) gibt es ein portables ZIP
+`kanata-studio-rust-<version>-windows-x86_64.zip`. Es enthält Qt, QML und die
+MSVC-Laufzeit. Eine Installation oder Administratorrechte sind nicht nötig:
+entpacken und `kanata-studio-rust.exe` starten.
+
+Kanata ist nicht enthalten ([Kanata-Releases](https://github.com/jtroo/kanata/releases)).
+Kanata Studio sucht `kanata.exe` (auch `kanata_winIOv2.exe`) neben der App, in
+`%LOCALAPPDATA%\kanata` und im `PATH`. Die Konfiguration liegt wie bei Kanata
+standardmäßig unter `%APPDATA%\kanata\kanata.kbd`.
+
+Unter Windows gibt es kein systemd. **Kanata einrichten** legt deshalb statt
+`kanata.service` einen Autostart-Eintrag für den aktuellen Benutzer an
+(`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, Wert `Kanata`).
+Dieser startet Kanata über Kanata Studio ohne Konsolenfenster. Ein vorhandener
+Eintrag wird nie ersetzt. Nach Speichern und Testen beendet Kanata Studio die
+laufende Kanata-Instanz und startet sie mit der Konfiguration aus dem Eintrag
+neu. Ein Kanata, das als Administrator läuft, kann es nicht beenden; dann
+meldet es einen Fehler und stellt die vorherige Datei wieder her. Den Ordner
+nach dem Verschieben nicht vergessen: der Autostart zeigt auf die alte
+`kanata-studio-rust.exe` und muss neu eingerichtet werden (Eintrag in
+`regedit` oder den Autostart-Einstellungen von Windows löschen).
+
+Ein unterbrochener 30-Sekunden-Test wird bei der nächsten Anmeldung über den
+Eintrag `KanataStudioRecover` wiederhergestellt. Das Tastaturlayout (Deutsch,
+Englisch US/UK) folgt dem aktiven Windows-Eingabegebietsschema. Kanata erfasst
+unter Windows alle Tastaturen gemeinsam; die App zeigt deshalb eine allgemeine
+Tastatur, deren Form über die Layoutauswahl einstellbar ist.
+
+[Portable Windows bundle](.github/workflows/windows-bundle.yml) baut das ZIP
+mit MSVC 2022 und Qt 6.8.3, startet das entpackte Paket offscreen und hängt es
+bei Versionstags an denselben Release-Entwurf wie die Linux-Pakete. Lokal unter
+Windows in einer „x64 Native Tools“-Eingabeaufforderung mit Qt im `PATH`:
+
+```bat
+cargo build --release --locked
+python tools\prepare-ui.py
+cd qt && qmake kanata-studio-rust.pro CONFIG+=release CONFIG-=debug_and_release && nmake && cd ..
+python tools\package-windows.py --development
+```
+
 ## Pakete für andere Distributionen bauen
 
 [Portable Linux bundle](.github/workflows/linux-bundle.yml) baut die App

@@ -1,3 +1,6 @@
+// These tests drive Linux-only behaviour (systemd and /dev/uinput) through shell scripts.
+#![cfg(unix)]
+
 use kanata_studio_core::setup::{Permissions, group_entry, unit_text};
 use serde_json::{Value, json};
 use std::fs;

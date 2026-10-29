@@ -57,6 +57,7 @@ fn creates_directory_and_never_replaces_a_file() {
     std::fs::remove_dir_all(dir).unwrap();
 }
 
+#[cfg(unix)]
 #[test]
 fn kanata_rejection_writes_nothing() {
     let dir = scratch("reject");

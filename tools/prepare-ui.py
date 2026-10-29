@@ -13,11 +13,11 @@ changes = {
     "ActionPanel.qml": [('backend.displayKeyName(backend.selectedPhysicalKey)', '(backend.keyNames[backend.selectedPhysicalKey] || backend.displayKeyName(backend.selectedPhysicalKey))')],
 }
 for name, replacements in changes.items():
-    source = (root / "ui" / name).read_text()
+    source = (root / "ui" / name).read_text(encoding="utf-8")
     for old, new in replacements:
         if source.count(old) != 1:
             raise SystemExit(f"QML-Anbindung muss aktualisiert werden: {name}: {old}")
         source = source.replace(old, new)
     output = target / name
-    if not output.exists() or output.read_text() != source:
-        output.write_text(source)
+    if not output.exists() or output.read_text(encoding="utf-8") != source:
+        output.write_text(source, encoding="utf-8")
