@@ -85,7 +85,6 @@ fn session_retains_history_and_survives_invalid_requests() {
     assert_eq!(undo["canRedo"], true);
     let redo = request(json!({"op":"redo", "source":SOURCE}));
     assert_eq!(redo["source"], source);
-    drop(request);
     drop(input);
     assert!(child.wait().unwrap().success());
 }
