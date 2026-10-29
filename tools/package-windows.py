@@ -26,6 +26,11 @@ QT_MODULES = {
     "Qt6QuickDialogs2QuickImpl": "qtdeclarative", "Qt6QuickDialogs2Utils": "qtdeclarative",
     "Qt6QuickEffects": "qtdeclarative", "Qt6LabsSettings": "qtdeclarative", "Qt6LabsFolderListModel": "qtdeclarative",
     "Qt6LabsQmlModels": "qtdeclarative", "Qt6LabsPlatform": "qtdeclarative",
+    # windeployqt ships every Quick Controls style; all of them live in qtdeclarative.
+    **{f"Qt6QuickControls2{style}": "qtdeclarative" for style in (
+        "Impl", "Basic", "BasicStyleImpl", "Fusion", "FusionStyleImpl", "Imagine", "ImagineStyleImpl",
+        "Material", "MaterialStyleImpl", "Universal", "UniversalStyleImpl",
+        "FluentWinUI3StyleImpl", "WindowsStyleImpl")},
     "Qt6Svg": "qtsvg", "Qt6ShaderTools": "qtshadertools",
 }
 
