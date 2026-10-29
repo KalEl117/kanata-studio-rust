@@ -60,6 +60,8 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
+          # The offscreen platform does not use DirectWrite and finds no fonts on its own.
+          QT_QPA_FONTDIR: C:\Windows\Fonts
         run: |
           $archive = Get-ChildItem dist -Filter 'kanata-studio-rust-*-windows-x86_64.zip' | Select-Object -First 1
           $expected = (Get-Content "$($archive.FullName).sha256").Split(' ')[0]
