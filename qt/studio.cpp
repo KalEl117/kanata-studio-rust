@@ -354,7 +354,7 @@ bool Studio::createConfig(const QVariantList &rows) {
     const QJsonObject result = rustRequest({{"op", "createConfig"}, {"path", path}, {"rows", keyRows}, {"binary", kanataBinary()}});
     if (!result.value("ok").toBool()) { setStatus(result.value("error").toString(), true); return false; }
     if (!open(path)) return false;
-    setStatus("Neue Konfiguration angelegt: " + path);
+    setStatus("Neue Konfiguration angelegt: " + QDir::toNativeSeparators(path));
     return true;
 }
 

@@ -83,6 +83,8 @@ ApplicationWindow {
     // kanata.service and device permissions; refreshed at start and after the setup dialog.
     // On Windows an autostart entry replaces the service and no device permissions are needed.
     readonly property bool windowsHost: Qt.platform.os === "windows"
+    // Qt keeps paths with "/"; show them the way Windows users write them.
+    function nativePath(path) { return windowsHost && path ? path.replace(/\//g, "\\") : path }
     property var kanataStatus: ({})
     function refreshKanataStatus() { kanataStatus = studio.kanataSetup() }
     Component.onCompleted: refreshKanataStatus()
@@ -301,7 +303,7 @@ ApplicationWindow {
             Repeater {
                 model: [
                     {ok: !!window.kanataStatus.kanata, label: window.kanataStatus.kanata ? window.tr("Kanata gefunden: ") + window.kanataStatus.kanata : window.tr("Kanata nicht gefunden · bitte zuerst installieren (github.com/jtroo/kanata)")},
-                    {ok: !!window.kanataStatus.configPath, label: window.kanataStatus.configPath ? window.tr("Konfiguration: ") + window.kanataStatus.configPath : window.tr("Keine Konfiguration geöffnet")},
+                    {ok: !!window.kanataStatus.configPath, label: window.kanataStatus.configPath ? window.tr("Konfiguration: ") + window.nativePath(window.kanataStatus.configPath) : window.tr("Keine Konfiguration geöffnet")},
                     {ok: window.kanataStatus.service === true, label: window.windowsHost
                         ? window.tr(window.kanataStatus.service ? "Kanata-Autostart eingerichtet" : "Kanata-Autostart nicht eingerichtet")
                         : window.tr(window.kanataStatus.service ? "kanata.service eingerichtet" : "kanata.service nicht eingerichtet")},
@@ -611,7 +613,7 @@ ApplicationWindow {
                     Item { Layout.fillHeight: true }
                     Rectangle { Layout.fillWidth: true; height: 1; color: Qt.alpha(window.fg, 0.12) }
                     Text { text: window.tr("KONFIGURATION"); color: window.muted; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 1.8 }
-                    Text { text: studio.path; color: window.fg; font.pixelSize: 11; wrapMode: Text.WrapAnywhere; Layout.fillWidth: true }
+                    Text { text: window.nativePath(studio.path); color: window.fg; font.pixelSize: 11; wrapMode: Text.WrapAnywhere; Layout.fillWidth: true }
                     Text { text: studio.keys.length + " " + window.tr("Quelltasten") + "  ·  " + studio.layers.length + " " + window.tr("Ebenen"); color: window.muted; font.pixelSize: 11 }
                 }
             }
@@ -1081,7 +1083,7 @@ ApplicationWindow {
                     text: window.tr(studio.status)
                     color: window.red; font.pixelSize: 13; wrapMode: Text.WordWrap
                 }
-                Text { Layout.fillWidth: true; text: window.tr("Datei: ") + (firstRun.setup.configPath || ""); color: window.muted; font.pixelSize: 12; wrapMode: Text.WrapAnywhere }
+                Text { Layout.fillWidth: true; text: window.tr("Datei: ") + window.nativePath(firstRun.setup.configPath || ""); color: window.muted; font.pixelSize: 12; wrapMode: Text.WrapAnywhere }
                 Rectangle { Layout.fillWidth: true; height: 1; color: Qt.alpha(window.fg, 0.12) }
                 Repeater {
                     model: [
