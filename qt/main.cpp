@@ -313,9 +313,23 @@ int main(int argc, char *argv[]) {
         const bool after = ok && formShowsLayer();
         root->setProperty("uiLanguage", language);
         studio.discard();
-        std::fprintf(before && after ? stdout : stderr, "UI-Prüfung: %s (vorher=%d nach Sprachwechsel=%d)\n",
-                     before && after ? "OK" : "fehlgeschlagen", before, after);
-        return before && after ? 0 : 1;
+        // A status change while "Kanata einrichten" is closed must not leave deleted rows in its
+        // layout: with Qt 6.4 the next open() crashed. Opening is the check; a crash fails it.
+        QObject *setupDialog = root->findChild<QObject *>("setupDialog");
+        const QVariant kanataStatus = root->property("kanataStatus");
+        QVariantMap changedStatus = kanataStatus.toMap();
+        changedStatus["service"] = !changedStatus.value("service").toBool();
+        root->setProperty("kanataStatus", changedStatus);
+        QCoreApplication::processEvents();
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        const bool setupOpens = setupDialog && QMetaObject::invokeMethod(setupDialog, "open");
+        QCoreApplication::processEvents();
+        if (setupDialog) QMetaObject::invokeMethod(setupDialog, "close");
+        root->setProperty("kanataStatus", kanataStatus);
+        const bool passed = before && after && setupOpens;
+        std::fprintf(passed ? stdout : stderr, "UI-Prüfung: %s (vorher=%d nach Sprachwechsel=%d Einrichtung=%d)\n",
+                     passed ? "OK" : "fehlgeschlagen", before, after, setupOpens);
+        return passed ? 0 : 1;
     }
     if (benchmarkUi) {
         QTimer::singleShot(200, &app, [&] {

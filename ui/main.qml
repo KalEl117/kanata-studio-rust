@@ -295,17 +295,22 @@ ApplicationWindow {
             }
         }
         contentItem: ColumnLayout {
+            id: setupContent
             spacing: 10
+            readonly property var checks: [
+                {ok: !!window.kanataStatus.kanata, label: window.kanataStatus.kanata ? window.tr("Kanata gefunden: ") + window.kanataStatus.kanata : window.tr("Kanata nicht gefunden · bitte zuerst installieren (github.com/jtroo/kanata)")},
+                {ok: !!window.kanataStatus.configPath, label: window.kanataStatus.configPath ? window.tr("Konfiguration: ") + window.kanataStatus.configPath : window.tr("Keine Konfiguration geöffnet")},
+                {ok: window.kanataStatus.service === true, label: window.tr(window.kanataStatus.service ? "kanata.service eingerichtet" : "kanata.service nicht eingerichtet")},
+                {ok: window.kanataStatus.inputReadable === true, label: window.tr(window.kanataStatus.inputReadable ? "Eingabegeräte lesbar (/dev/input)" : "Eingabegeräte nicht lesbar (/dev/input)")},
+                {ok: window.kanataStatus.uinputWritable === true, label: window.tr(window.kanataStatus.uinputWritable ? "Virtuelle Tastatur erlaubt (/dev/uinput)" : "Virtuelle Tastatur nicht erlaubt (/dev/uinput)")}
+            ]
             Repeater {
-                model: [
-                    {ok: !!window.kanataStatus.kanata, label: window.kanataStatus.kanata ? window.tr("Kanata gefunden: ") + window.kanataStatus.kanata : window.tr("Kanata nicht gefunden · bitte zuerst installieren (github.com/jtroo/kanata)")},
-                    {ok: !!window.kanataStatus.configPath, label: window.kanataStatus.configPath ? window.tr("Konfiguration: ") + window.kanataStatus.configPath : window.tr("Keine Konfiguration geöffnet")},
-                    {ok: window.kanataStatus.service === true, label: window.tr(window.kanataStatus.service ? "kanata.service eingerichtet" : "kanata.service nicht eingerichtet")},
-                    {ok: window.kanataStatus.inputReadable === true, label: window.tr(window.kanataStatus.inputReadable ? "Eingabegeräte lesbar (/dev/input)" : "Eingabegeräte nicht lesbar (/dev/input)")},
-                    {ok: window.kanataStatus.uinputWritable === true, label: window.tr(window.kanataStatus.uinputWritable ? "Virtuelle Tastatur erlaubt (/dev/uinput)" : "Virtuelle Tastatur nicht erlaubt (/dev/uinput)")}
-                ]
+                // A count instead of the list keeps the rows alive when the status changes. Qt 6.4
+                // layouts keep rows a closed dialog's Repeater deleted and crash on the next open().
+                model: setupContent.checks.length
                 delegate: RowLayout {
-                    required property var modelData
+                    required property int index
+                    readonly property var modelData: setupContent.checks[index]
                     Layout.fillWidth: true
                     spacing: 10
                     Rectangle { width: 7; height: 7; radius: 4; color: modelData.ok ? window.green : window.changeColor }
